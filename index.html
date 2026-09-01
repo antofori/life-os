@@ -211,6 +211,41 @@
   .save-note{ position:fixed; bottom:18px; right:24px; font-size:11.5px; color:var(--text-dim); background:var(--panel); border:1px solid var(--line); padding:7px 12px; border-radius:3px; opacity:0; transition:opacity .4s ease; }
   .save-note.show{ opacity:1; }
 
+  /* TABS */
+  .tabs-nav{ display:flex; gap:2px; margin-bottom:16px; border-bottom:1px solid var(--line); }
+  .tab-btn{ background:none; border:none; padding:12px 16px; color:var(--text-dim); font-size:13px; cursor:pointer; border-bottom:2px solid transparent; font-weight:500; }
+  .tab-btn.active{ color:var(--text); border-bottom-color:var(--brass); }
+  .tab-btn:hover:not(.active){ color:var(--text); }
+  .tab-content{ display:none; }
+  .tab-content.active{ display:block; }
+
+  /* TAB FORMS */
+  .income-form{ display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap; align-items:flex-end; }
+  .income-form input, .income-form select{ background:var(--panel-2); border:1px solid var(--line); color:var(--text); padding:7px 8px; border-radius:2px; font-family:'IBM Plex Mono', monospace; font-size:12px; }
+  .income-form input:focus, .income-form select:focus{ outline:none; border-color:var(--brass-dim); }
+  .income-form label{ display:flex; flex-direction:column; gap:4px; font-size:11px; }
+  .income-form label span{ color:var(--text-dim); }
+  .income-form button{ background:var(--brass-dim); border:none; color:var(--bg); padding:7px 14px; border-radius:2px; cursor:pointer; font-weight:600; font-size:12px; }
+  .income-form button:hover{ background:var(--brass); }
+
+  .income-table{ width:100%; border-collapse:collapse; font-size:12px; margin-bottom:16px; }
+  .income-table th{ text-align:left; color:var(--text-dim); font-weight:500; padding:8px; border-bottom:1px solid var(--line); font-size:11px; }
+  .income-table td{ padding:8px; border-bottom:1px solid var(--line); }
+  .income-table .delete-btn{ background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:11px; }
+  .income-table .delete-btn:hover{ color:var(--behind); }
+
+  .alloc-summary{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:16px; }
+  .alloc-card{ background:var(--panel-2); border:1px solid var(--line); border-radius:2px; padding:12px; }
+  .alloc-card .lbl{ font-size:11px; color:var(--text-dim); margin-bottom:4px; }
+  .alloc-card .avail{ font-family:'IBM Plex Mono', monospace; font-size:15px; margin-bottom:6px; }
+  .alloc-card .alloc{ font-size:10px; color:var(--text-dim); }
+
+  .alloc-transfers{ display:flex; gap:10px; flex-direction:column; }
+  .transfer-row{ display:grid; grid-template-columns:1fr 100px 140px; gap:10px; align-items:flex-end; }
+  .transfer-row input{ background:var(--panel-2); border:1px solid var(--line); color:var(--text); padding:7px 8px; border-radius:2px; font-family:'IBM Plex Mono', monospace; font-size:12px; }
+  .transfer-row button{ background:var(--brass-dim); border:none; color:var(--bg); padding:7px 12px; border-radius:2px; cursor:pointer; font-weight:600; font-size:12px; }
+  .transfer-row button:hover{ background:var(--brass); }
+
   .placeholder{ color:var(--text-dim); font-size:14px; padding:60px 0; text-align:center; border:1px dashed var(--line); border-radius:4px; }
 
   @media (max-width:820px){
@@ -295,7 +330,8 @@ let saveTimer = null;
 
 function defaultData(){
   return {
-    months: {},
+    income: {},
+    allocations: {},
     years: YEARS.reduce((acc, y) => { acc[y.year] = { contributions: [], portfolio: 0 }; return acc; }, {}),
     allocation: ALLOCATIONS.reduce((acc, a) => { acc[a.key] = 0; return acc; }, {}),
     milestones: MILESTONES.reduce((acc, m) => { acc[m.id] = { status: "not", notes: "" }; return acc; }, {}),
@@ -389,6 +425,263 @@ function pct(actual, target){
   return Math.max(0, Math.min(100, (actual/target)*100));
 }
 
+function renderTabs(){
+  wireTabs();
+  renderIncomeTab();
+  renderAllocationsTab();
+  renderCapitalTab();
+}
+
+function wireTabs(){
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const tab = e.target.getAttribute('data-tab');
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      e.target.classList.add('active');
+      document.getElementById(tab + '-tab').classList.add('active');
+    });
+  });
+}
+
+function renderIncomeTab(){
+  const key = monthKey();
+  if(!DATA.income) DATA.income = {};
+  const entries = DATA.income[key] || [];
+  const total = entries.reduce((s,e) => s + (Number(e.amount)||0), 0);
+
+  const entryRows = entries.length
+    ? entries.map((e, idx) => `
+        <tr>
+          <td>${e.date || 'no date'}</td>
+          <td>${e.person || ''}</td>
+          <td>${e.source || ''}</td>
+          <td class="num-cell">${fmt(e.amount)}</td>
+          <td><button class="delete-btn" data-delete-income="${idx}">✕</button></td>
+        </tr>
+      `).join('')
+    : `<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:12px;">No income entries yet</td></tr>`;
+
+  document.getElementById('income-tab').innerHTML = `
+    <div style="margin-bottom:16px;">
+      <p style="color:var(--text-dim);font-size:12px;margin:0 0 10px;">Income log for ${monthLabel()}</p>
+      <div class="income-form">
+        <label><span>Date</span><input type="date" id="income-date"></label>
+        <label><span>Person</span>
+          <select id="income-person">
+            <option value="">Select</option>
+            <option value="Ant">Ant</option>
+            <option value="Sun">Sun</option>
+          </select>
+        </label>
+        <label><span>Source</span><input type="text" id="income-source" placeholder="Salary, consulting"></label>
+        <label><span>Amount</span><input type="number" id="income-amount" placeholder="0"></label>
+        <button id="add-income-btn">Add income</button>
+      </div>
+      <table class="income-table">
+        <thead>
+          <tr><th>Date</th><th>Person</th><th>Source</th><th>Amount</th><th></th></tr>
+        </thead>
+        <tbody>
+          ${entryRows}
+        </tbody>
+      </table>
+      <p style="color:var(--text-dim);font-size:12px;margin:0;">Total income: <span class="mono">${fmt(total)}</span></p>
+    </div>
+  `;
+
+  wireIncomeForm();
+}
+
+function wireIncomeForm(){
+  const addBtn = document.getElementById('add-income-btn');
+  if(!addBtn) return;
+
+  addBtn.addEventListener('click', () => {
+    const key = monthKey();
+    const date = document.getElementById('income-date').value;
+    const person = document.getElementById('income-person').value;
+    const source = document.getElementById('income-source').value;
+    const amount = Number(document.getElementById('income-amount').value) || 0;
+
+    if(!person || amount <= 0) return;
+
+    if(!DATA.income) DATA.income = {};
+    if(!DATA.income[key]) DATA.income[key] = [];
+    DATA.income[key].push({ date, person, source, amount });
+    saveData();
+
+    renderIncomeTab();
+    renderAllocationsTab();
+  });
+
+  document.querySelectorAll('[data-delete-income]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const key = monthKey();
+      const idx = parseInt(e.target.getAttribute('data-delete-income'));
+      if(DATA.income[key]) DATA.income[key].splice(idx, 1);
+      saveData();
+      renderIncomeTab();
+      renderAllocationsTab();
+    });
+  });
+}
+
+function renderAllocationsTab(){
+  const key = monthKey();
+  if(!DATA.income) DATA.income = {};
+  const entries = DATA.income[key] || [];
+  const totalIncome = entries.reduce((s,e) => s + (Number(e.amount)||0), 0);
+
+  const capitalAvail = totalIncome * 0.5;
+  const expensesAvail = totalIncome * 0.4;
+  const titheAvail = totalIncome * 0.1;
+
+  if(!DATA.allocations) DATA.allocations = {};
+  const allocRecord = DATA.allocations[key] || { capital: 0, expenses: 0, tithe: 0 };
+
+  document.getElementById('allocations-tab').innerHTML = `
+    <div>
+      <p style="color:var(--text-dim);font-size:12px;margin:0 0 12px;">50% Capital / 40% Expenses / 10% Tithe</p>
+      <div class="alloc-summary">
+        <div class="alloc-card">
+          <div class="lbl">CAPITAL (50%)</div>
+          <div class="avail">${fmt(capitalAvail)}</div>
+          <div class="alloc">Allocated: ${fmt(allocRecord.capital)}</div>
+          <div style="color:var(--brass);font-size:10px;margin-top:4px;">Available: ${fmt(Math.max(0, capitalAvail - allocRecord.capital))}</div>
+        </div>
+        <div class="alloc-card">
+          <div class="lbl">EXPENSES (40%)</div>
+          <div class="avail">${fmt(expensesAvail)}</div>
+          <div class="alloc">Allocated: ${fmt(allocRecord.expenses)}</div>
+          <div style="color:var(--brass);font-size:10px;margin-top:4px;">Available: ${fmt(Math.max(0, expensesAvail - allocRecord.expenses))}</div>
+        </div>
+        <div class="alloc-card">
+          <div class="lbl">TITHE (10%)</div>
+          <div class="avail">${fmt(titheAvail)}</div>
+          <div class="alloc">Allocated: ${fmt(allocRecord.tithe)}</div>
+          <div style="color:var(--brass);font-size:10px;margin-top:4px;">Available: ${fmt(Math.max(0, titheAvail - allocRecord.tithe))}</div>
+        </div>
+      </div>
+
+      <div class="alloc-transfers">
+        <div class="transfer-row">
+          <label style="margin:0;color:var(--text-dim);font-size:12px;">Transfer to Capital Engine</label>
+          <input type="number" id="transfer-capital" placeholder="Amount">
+          <button id="btn-transfer-capital">Transfer</button>
+        </div>
+        <div class="transfer-row">
+          <label style="margin:0;color:var(--text-dim);font-size:12px;">Mark Expenses as moved</label>
+          <input type="number" id="transfer-expenses" placeholder="Amount">
+          <button id="btn-transfer-expenses">Confirm</button>
+        </div>
+        <div class="transfer-row">
+          <label style="margin:0;color:var(--text-dim);font-size:12px;">Mark Tithe as moved</label>
+          <input type="number" id="transfer-tithe" placeholder="Amount">
+          <button id="btn-transfer-tithe">Confirm</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  wireAllocationTransfers();
+}
+
+function wireAllocationTransfers(){
+  const key = monthKey();
+  const entries = DATA.income[key] || [];
+  const totalIncome = entries.reduce((s,e) => s + (Number(e.amount)||0), 0);
+  const capitalAvail = (totalIncome * 0.5) - (DATA.allocations?.[key]?.capital || 0);
+  const expensesAvail = (totalIncome * 0.4) - (DATA.allocations?.[key]?.expenses || 0);
+  const titheAvail = (totalIncome * 0.1) - (DATA.allocations?.[key]?.tithe || 0);
+
+  const transferCapital = document.getElementById('btn-transfer-capital');
+  const transferExpenses = document.getElementById('btn-transfer-expenses');
+  const transferTithe = document.getElementById('btn-transfer-tithe');
+
+  if(transferCapital){
+    transferCapital.addEventListener('click', () => {
+      const amount = Number(document.getElementById('transfer-capital').value) || 0;
+      if(amount <= 0 || amount > capitalAvail) { alert('Invalid amount'); return; }
+      if(!DATA.allocations) DATA.allocations = {};
+      if(!DATA.allocations[key]) DATA.allocations[key] = { capital: 0, expenses: 0, tithe: 0 };
+      DATA.allocations[key].capital += amount;
+      
+      // Add to Capital Engine for current year (Year 1 for now)
+      if(!DATA.years[1].contributions) DATA.years[1].contributions = [];
+      DATA.years[1].contributions.push({
+        id: 'a-' + Date.now(),
+        date: new Date().toISOString().split('T')[0],
+        amount: amount,
+        note: 'From ' + monthLabel() + ' allocation',
+      });
+
+      saveData();
+      document.getElementById('transfer-capital').value = '';
+      renderAllocationsTab();
+      renderCapitalTab();
+      renderYearsTable();
+    });
+  }
+
+  if(transferExpenses){
+    transferExpenses.addEventListener('click', () => {
+      const amount = Number(document.getElementById('transfer-expenses').value) || 0;
+      if(amount <= 0 || amount > expensesAvail) { alert('Invalid amount'); return; }
+      if(!DATA.allocations) DATA.allocations = {};
+      if(!DATA.allocations[key]) DATA.allocations[key] = { capital: 0, expenses: 0, tithe: 0 };
+      DATA.allocations[key].expenses += amount;
+      saveData();
+      document.getElementById('transfer-expenses').value = '';
+      renderAllocationsTab();
+    });
+  }
+
+  if(transferTithe){
+    transferTithe.addEventListener('click', () => {
+      const amount = Number(document.getElementById('transfer-tithe').value) || 0;
+      if(amount <= 0 || amount > titheAvail) { alert('Invalid amount'); return; }
+      if(!DATA.allocations) DATA.allocations = {};
+      if(!DATA.allocations[key]) DATA.allocations[key] = { capital: 0, expenses: 0, tithe: 0 };
+      DATA.allocations[key].tithe += amount;
+      saveData();
+      document.getElementById('transfer-tithe').value = '';
+      renderAllocationsTab();
+    });
+  }
+}
+
+function renderCapitalTab(){
+  const key = monthKey();
+  const year1Contribs = (DATA.years?.[1]?.contributions || []).filter(c => c.note?.includes(monthLabel()));
+  const total = year1Contribs.reduce((s,c) => s + (Number(c.amount)||0), 0);
+
+  const rows = year1Contribs.length
+    ? year1Contribs.map(c => `
+        <tr>
+          <td>${c.date || ''}</td>
+          <td>${c.note || ''}</td>
+          <td class="num-cell">${fmt(c.amount)}</td>
+        </tr>
+      `).join('')
+    : `<tr><td colspan="3" style="text-align:center;color:var(--text-dim);padding:12px;">No transfers yet</td></tr>`;
+
+  document.getElementById('capital-tab').innerHTML = `
+    <div>
+      <p style="color:var(--text-dim);font-size:12px;margin:0 0 12px;">Allocations transferred to Capital Engine for Year 1</p>
+      <table class="income-table">
+        <thead>
+          <tr><th>Date</th><th>Source</th><th>Amount</th></tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+      <p style="color:var(--text-dim);font-size:12px;margin:0;">Total transferred: <span class="mono">${fmt(total)}</span></p>
+    </div>
+  `;
+}
+
 function renderNav(){
   const list = document.getElementById('nav-list');
   list.innerHTML = '';
@@ -443,6 +736,18 @@ function renderMainInner(main){
     </section>
 
     <section>
+      <div class="section-head"><h2>Cash allocation system</h2></div>
+      <div class="tabs-nav">
+        <button class="tab-btn active" data-tab="income">1. Income</button>
+        <button class="tab-btn" data-tab="allocations">2. Allocations</button>
+        <button class="tab-btn" data-tab="capital">3. Capital Engine</button>
+      </div>
+      <div id="income-tab" class="tab-content active"></div>
+      <div id="allocations-tab" class="tab-content"></div>
+      <div id="capital-tab" class="tab-content"></div>
+    </section>
+
+    <section>
       <div class="section-head">
         <h2>Asset allocation · CE-04 to CE-07</h2>
         <span class="section-note">Current portfolio value: ${fmt(latestPortfolio)}</span>
@@ -452,7 +757,7 @@ function renderMainInner(main){
 
     <section>
       <div class="section-head">
-        <h2>This month's income · CE-01</h2>
+        <h2>Six year contribution schedule</h2>
         <span class="section-note">Target by March 2027: GH¢33,000 combined</span>
       </div>
       <div class="month-label">${monthLabel()}</div>
@@ -491,9 +796,8 @@ function renderMainInner(main){
   renderYearsTable();
   renderAllocation();
   renderMilestones();
-  renderIncomeDashboard();
   renderFreedomGauge();
-  wireIncomeInputs();
+  renderTabs();
 }
 
 function renderFreedomGauge(){
