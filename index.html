@@ -155,7 +155,7 @@
   .variance-neg{ color:var(--behind); }
 
   /* ALLOCATION */
-  .alloc-row{ display:grid; grid-template-columns:140px 1fr 90px 100px; align-items:center; gap:14px; padding:10px 0; border-bottom:1px solid var(--line); }
+  .alloc-row{ display:grid; grid-template-columns:140px 1fr 90px; align-items:center; gap:14px; padding:10px 0; border-bottom:1px solid var(--line); }
   .alloc-row:last-child{ border-bottom:none; }
   .alloc-name{ font-size:13.5px; }
   .alloc-name .pct{ color:var(--text-dim); font-size:11.5px; display:block; margin-top:2px; }
@@ -233,6 +233,7 @@
   .income-table td{ padding:8px; border-bottom:1px solid var(--line); }
   .income-table .delete-btn{ background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:11px; }
   .income-table .delete-btn:hover{ color:var(--behind); }
+  .income-table select, .income-table input{ background:var(--panel-2); border:1px solid var(--line); color:var(--text); padding:5px 6px; border-radius:2px; font-family:'IBM Plex Mono', monospace; font-size:11px; }
 
   .alloc-summary{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:16px; }
   .alloc-card{ background:var(--panel-2); border:1px solid var(--line); border-radius:2px; padding:12px; }
@@ -245,6 +246,18 @@
   .transfer-row input{ background:var(--panel-2); border:1px solid var(--line); color:var(--text); padding:7px 8px; border-radius:2px; font-family:'IBM Plex Mono', monospace; font-size:12px; }
   .transfer-row button{ background:var(--brass-dim); border:none; color:var(--bg); padding:7px 12px; border-radius:2px; cursor:pointer; font-weight:600; font-size:12px; }
   .transfer-row button:hover{ background:var(--brass); }
+
+  .person-panel{ background:var(--panel); border:1px solid var(--line); border-radius:3px; padding:18px; margin-bottom:16px; }
+  .joint-summary{ background:var(--panel-2); border:1px solid var(--brass-dim); border-radius:3px; padding:18px; margin-top:8px; }
+  .quick-allocate{ background:var(--panel-2); border:1px solid var(--brass-dim); border-radius:3px; padding:12px 14px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap; }
+  .quick-allocate button{ background:var(--brass); border:none; color:var(--bg); padding:8px 16px; border-radius:2px; cursor:pointer; font-weight:700; font-size:12.5px; white-space:nowrap; }
+  .quick-allocate button:hover{ background:var(--brass-dim); }
+
+  /* PERSON FILTER */
+  .filter-bar{ display:flex; gap:6px; margin-bottom:24px; }
+  .filter-btn{ background:var(--panel); border:1px solid var(--line); color:var(--text-dim); padding:8px 16px; border-radius:20px; cursor:pointer; font-size:12.5px; font-weight:500; }
+  .filter-btn.active{ background:var(--brass); border-color:var(--brass); color:var(--bg); font-weight:700; }
+  .filter-btn:hover:not(.active){ border-color:var(--brass-dim); color:var(--text); }
 
   .placeholder{ color:var(--text-dim); font-size:14px; padding:60px 0; text-align:center; border:1px dashed var(--line); border-radius:4px; }
 
@@ -330,9 +343,9 @@ let saveTimer = null;
 
 function defaultData(){
   return {
-    income: {},
-    allocations: {},
-    years: YEARS.reduce((acc, y) => { acc[y.year] = { contributions: [], portfolio: 0 }; return acc; }, {}),
+    transactions: [],
+    allocationSnapshots: [],
+    years: YEARS.reduce((acc, y) => { acc[y.year] = { portfolio: 0 }; return acc; }, {}),
     allocation: ALLOCATIONS.reduce((acc, a) => { acc[a.key] = 0; return acc; }, {}),
     milestones: MILESTONES.reduce((acc, m) => { acc[m.id] = { status: "not", notes: "" }; return acc; }, {}),
   };
@@ -352,30 +365,110 @@ function mergeWithDefaults(loaded){
   const base = defaultData();
   if(!loaded || typeof loaded !== 'object') return base;
 
-  let years = base.years;
-  if(loaded.years && typeof loaded.years === 'object'){
-    years = {};
+  // Already on the ledger model
+  if(Array.isArray(loaded.transactions)){
+    const years = {};
     YEARS.forEach(y => {
-      const ly = loaded.years[y.year];
-      if(ly && typeof ly === 'object'){
-        if(Array.isArray(ly.contributions)){
-          years[y.year] = { contributions: ly.contributions, portfolio: Number(ly.portfolio)||0 };
-        }else if(typeof ly.contributed === 'number' && ly.contributed > 0){
-          // migrate old single-number field into one log entry
-          years[y.year] = { contributions: [{ id: 'migrated-'+y.year, date: '', amount: ly.contributed, note: 'Carried over from previous version' }], portfolio: Number(ly.portfolio)||0 };
-        }else{
-          years[y.year] = { contributions: [], portfolio: Number(ly.portfolio)||0 };
-        }
-      }else{
-        years[y.year] = base.years[y.year];
-      }
+      const ly = (loaded.years && loaded.years[y.year]) || {};
+      years[y.year] = { portfolio: Number(ly.portfolio) || 0 };
+    });
+
+    let allocationSnapshots;
+    if(Array.isArray(loaded.allocationSnapshots)){
+      allocationSnapshots = loaded.allocationSnapshots;
+    }else if(loaded.allocation && typeof loaded.allocation === 'object' && Object.values(loaded.allocation).some(v => v > 0)){
+      allocationSnapshots = [{
+        id: 'snap-migrated', date: new Date().toISOString().split('T')[0],
+        realestate: loaded.allocation.realestate || 0,
+        stocks: loaded.allocation.stocks || 0,
+        bizequity: loaded.allocation.bizequity || 0,
+        fixedincome: loaded.allocation.fixedincome || 0,
+      }];
+    }else{
+      allocationSnapshots = [];
+    }
+
+    return {
+      transactions: loaded.transactions,
+      allocationSnapshots: allocationSnapshots,
+      years: years,
+      allocation: base.allocation,
+      milestones: (loaded.milestones && typeof loaded.milestones === 'object') ? Object.assign({}, base.milestones, loaded.milestones) : base.milestones,
+    };
+  }
+
+  // Migrating from the older two-source-of-truth model
+  const transactions = [];
+  let tid = 0;
+  const nextId = () => 'm-' + (tid++) + '-' + Date.now();
+
+  if(loaded.income && typeof loaded.income === 'object'){
+    Object.keys(loaded.income).forEach(monthKeyStr => {
+      (loaded.income[monthKeyStr] || []).forEach(e => {
+        transactions.push({
+          id: nextId(), type: 'income',
+          date: e.date || (monthKeyStr + '-01'),
+          person: e.person || '', source: e.source || '',
+          amount: Number(e.amount) || 0,
+        });
+      });
     });
   }
 
+  const years = {};
+  YEARS.forEach(y => {
+    const ly = loaded.years && loaded.years[y.year];
+    years[y.year] = { portfolio: (ly && Number(ly.portfolio)) || 0 };
+    if(ly && Array.isArray(ly.contributions)){
+      ly.contributions.forEach(c => {
+        transactions.push({
+          id: nextId(), type: 'allocation', bucket: 'capital', planYear: y.year,
+          date: c.date || (2026 + y.year) + '-01-01',
+          amount: Number(c.amount) || 0,
+          note: c.note || '',
+        });
+      });
+    }else if(ly && typeof ly.contributed === 'number' && ly.contributed > 0){
+      transactions.push({
+        id: nextId(), type: 'allocation', bucket: 'capital', planYear: y.year,
+        date: (2026 + y.year) + '-01-01',
+        amount: ly.contributed,
+        note: 'Carried over from previous version',
+      });
+    }
+  });
+
+  if(loaded.allocations && typeof loaded.allocations === 'object'){
+    Object.keys(loaded.allocations).forEach(monthKeyStr => {
+      const rec = loaded.allocations[monthKeyStr] || {};
+      ['expenses','tithe'].forEach(bucket => {
+        if(rec[bucket] > 0){
+          transactions.push({
+            id: nextId(), type: 'allocation', bucket: bucket,
+            date: monthKeyStr + '-01',
+            amount: Number(rec[bucket]) || 0,
+            note: 'Migrated total',
+          });
+        }
+      });
+    });
+  }
+
+  const allocationSnapshots = (loaded.allocation && typeof loaded.allocation === 'object' && Object.values(loaded.allocation).some(v => v > 0))
+    ? [{
+        id: 'snap-migrated', date: new Date().toISOString().split('T')[0],
+        realestate: loaded.allocation.realestate || 0,
+        stocks: loaded.allocation.stocks || 0,
+        bizequity: loaded.allocation.bizequity || 0,
+        fixedincome: loaded.allocation.fixedincome || 0,
+      }]
+    : [];
+
   return {
-    months: (loaded.months && typeof loaded.months === 'object') ? loaded.months : base.months,
+    transactions: transactions,
+    allocationSnapshots: allocationSnapshots,
     years: years,
-    allocation: (loaded.allocation && typeof loaded.allocation === 'object') ? Object.assign({}, base.allocation, loaded.allocation) : base.allocation,
+    allocation: base.allocation,
     milestones: (loaded.milestones && typeof loaded.milestones === 'object') ? Object.assign({}, base.milestones, loaded.milestones) : base.milestones,
   };
 }
@@ -447,11 +540,79 @@ function pct(actual, target){
   return Math.max(0, Math.min(100, (actual/target)*100));
 }
 
+/* ===== LEDGER: single source of truth for every cedi ===== */
+
+let viewFilter = 'joint'; // 'Ant' | 'Sun' | 'joint'
+
+function matchesFilter(t, person){
+  const p = person !== undefined ? person : viewFilter;
+  if(p === 'joint') return true;
+  return t.person === p;
+}
+
+function filterLabel(){
+  if(viewFilter === 'joint') return 'Joint';
+  return viewFilter + "'s view";
+}
+
+function genId(){
+  return 't-' + Date.now() + '-' + Math.random().toString(36).slice(2,7);
+}
+
+function incomeForMonth(key, person){
+  return DATA.transactions.filter(t => t.type === 'income' && (t.date||'').slice(0,7) === key && matchesFilter(t, person));
+}
+
+function totalIncomeForMonth(key, person){
+  return incomeForMonth(key, person).reduce((s,t) => s + (Number(t.amount)||0), 0);
+}
+
+function allocatedForMonth(key, bucket, person){
+  return DATA.transactions
+    .filter(t => t.type === 'allocation' && t.bucket === bucket && (t.date||'').slice(0,7) === key && matchesFilter(t, person))
+    .reduce((s,t) => s + (Number(t.amount)||0), 0);
+}
+
+function contributionsForYear(year, person){
+  return DATA.transactions.filter(t => t.type === 'allocation' && t.bucket === 'capital' && t.planYear === year && matchesFilter(t, person));
+}
+
+function yearContributed(year, person){
+  return contributionsForYear(year, person).reduce((s,t) => s + (Number(t.amount)||0), 0);
+}
+
+function capitalForMonth(key, person){
+  return DATA.transactions
+    .filter(t => t.type === 'allocation' && t.bucket === 'capital' && (t.date||'').slice(0,7) === key && matchesFilter(t, person))
+    .reduce((s,t) => s + (Number(t.amount)||0), 0);
+}
+
+function deleteTransaction(id){
+  DATA.transactions = DATA.transactions.filter(t => t.id !== id);
+}
+
+function findTransaction(id){
+  return DATA.transactions.find(t => t.id === id);
+}
+
 function renderTabs(){
   wireTabs();
   renderIncomeTab();
   renderAllocationsTab();
   renderCapitalTab();
+  renderTransactionsTab();
+}
+
+function renderAllUI(){
+  renderYearsTable();
+  renderFreedomGauge();
+  renderMonthlyRing();
+  renderPaceNote();
+  refreshPortfolioLabels();
+  renderIncomeTab();
+  renderAllocationsTab();
+  renderCapitalTab();
+  renderTransactionsTab();
 }
 
 function wireTabs(){
@@ -468,18 +629,17 @@ function wireTabs(){
 
 function renderIncomeTab(){
   const key = monthKey();
-  if(!DATA.income) DATA.income = {};
-  const entries = DATA.income[key] || [];
-  const total = entries.reduce((s,e) => s + (Number(e.amount)||0), 0);
+  const entries = incomeForMonth(key);
+  const total = totalIncomeForMonth(key);
 
   const entryRows = entries.length
-    ? entries.map((e, idx) => `
+    ? entries.map(e => `
         <tr>
           <td>${e.date || 'no date'}</td>
           <td>${e.person || ''}</td>
           <td>${e.source || ''}</td>
           <td class="num-cell">${fmt(e.amount)}</td>
-          <td><button class="delete-btn" data-delete-income="${idx}">✕</button></td>
+          <td><button class="delete-btn" data-delete-tx="${e.id}">✕</button></td>
         </tr>
       `).join('')
     : `<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:12px;">No income entries yet</td></tr>`;
@@ -520,7 +680,6 @@ function wireIncomeForm(){
   if(!addBtn) return;
 
   addBtn.addEventListener('click', () => {
-    const key = monthKey();
     const date = document.getElementById('income-date').value;
     const person = document.getElementById('income-person').value;
     const source = document.getElementById('income-source').value;
@@ -528,196 +687,201 @@ function wireIncomeForm(){
 
     if(!person || amount <= 0) return;
 
-    if(!DATA.income) DATA.income = {};
-    if(!DATA.income[key]) DATA.income[key] = [];
-    DATA.income[key].push({ date, person, source, amount });
+    DATA.transactions.push({
+      id: genId(), type: 'income',
+      date: date || new Date().toISOString().split('T')[0],
+      person, source, amount,
+    });
     saveData();
-
-    renderIncomeTab();
-    renderAllocationsTab();
+    renderAllUI();
   });
 
-  document.querySelectorAll('[data-delete-income]').forEach(btn => {
+  document.querySelectorAll('#income-tab [data-delete-tx]').forEach(btn => {
     btn.addEventListener('click', (e) => {
-      const key = monthKey();
-      const idx = parseInt(e.target.getAttribute('data-delete-income'));
-      if(DATA.income[key]) DATA.income[key].splice(idx, 1);
+      deleteTransaction(e.target.getAttribute('data-delete-tx'));
       saveData();
-      renderIncomeTab();
-      renderAllocationsTab();
+      renderAllUI();
     });
   });
 }
 
 function renderAllocationsTab(){
   const key = monthKey();
-  if(!DATA.income) DATA.income = {};
-  const entries = DATA.income[key] || [];
-  const totalIncome = entries.reduce((s,e) => s + (Number(e.amount)||0), 0);
 
-  const capitalAvail = totalIncome * 0.5;
-  const expensesAvail = totalIncome * 0.4;
-  const titheAvail = totalIncome * 0.1;
+  const personPanel = (person) => {
+    const totalIncome = totalIncomeForMonth(key, person);
+    const capitalAvail = totalIncome * 0.5;
+    const expensesAvail = totalIncome * 0.4;
+    const titheAvail = totalIncome * 0.1;
+    const capitalAllocated = allocatedForMonth(key, 'capital', person);
+    const expensesAllocated = allocatedForMonth(key, 'expenses', person);
+    const titheAllocated = allocatedForMonth(key, 'tithe', person);
+    const capitalRemaining = Math.max(0, capitalAvail - capitalAllocated);
+    const expensesRemaining = Math.max(0, expensesAvail - expensesAllocated);
+    const titheRemaining = Math.max(0, titheAvail - titheAllocated);
+    const fullyAllocated = capitalRemaining <= 0 && expensesRemaining <= 0 && titheRemaining <= 0;
 
-  if(!DATA.allocations) DATA.allocations = {};
-  const allocRecord = DATA.allocations[key] || { capital: 0, expenses: 0, tithe: 0 };
+    return `
+      <div class="person-panel">
+        <h3 style="margin:0 0 12px; font-size:15px;">${person}'s allocation</h3>
+        ${!fullyAllocated && totalIncome > 0 ? `
+          <div class="quick-allocate">
+            <div style="font-size:12.5px;">Allocate ${person}'s remaining income, split 50/40/10.</div>
+            <button data-allocate-all="${person}">Allocate all remaining</button>
+          </div>
+        ` : ''}
+        <div class="alloc-summary">
+          <div class="alloc-card">
+            <div class="lbl">CAPITAL (50%)</div>
+            <div class="avail">${fmt(capitalAvail)}</div>
+            <div class="alloc">Allocated: ${fmt(capitalAllocated)}</div>
+            <div style="color:var(--brass);font-size:10px;margin-top:4px;">Available: ${fmt(capitalRemaining)}</div>
+          </div>
+          <div class="alloc-card">
+            <div class="lbl">EXPENSES (40%)</div>
+            <div class="avail">${fmt(expensesAvail)}</div>
+            <div class="alloc">Allocated: ${fmt(expensesAllocated)}</div>
+            <div style="color:var(--brass);font-size:10px;margin-top:4px;">Available: ${fmt(expensesRemaining)}</div>
+          </div>
+          <div class="alloc-card">
+            <div class="lbl">TITHE (10%)</div>
+            <div class="avail">${fmt(titheAvail)}</div>
+            <div class="alloc">Allocated: ${fmt(titheAllocated)}</div>
+            <div style="color:var(--brass);font-size:10px;margin-top:4px;">Available: ${fmt(titheRemaining)}</div>
+          </div>
+        </div>
+        <div class="alloc-transfers">
+          <div class="transfer-row">
+            <label style="margin:0;color:var(--text-dim);font-size:12px;">Transfer to Capital Engine</label>
+            <input type="number" data-transfer-capital="${person}" placeholder="Amount">
+            <button data-btn-transfer-capital="${person}">Transfer</button>
+          </div>
+          <div class="transfer-row">
+            <label style="margin:0;color:var(--text-dim);font-size:12px;">Mark Expenses as moved</label>
+            <input type="number" data-transfer-expenses="${person}" placeholder="Amount">
+            <button data-btn-transfer-expenses="${person}">Confirm</button>
+          </div>
+          <div class="transfer-row">
+            <label style="margin:0;color:var(--text-dim);font-size:12px;">Mark Tithe as moved</label>
+            <input type="number" data-transfer-tithe="${person}" placeholder="Amount">
+            <button data-btn-transfer-tithe="${person}">Confirm</button>
+          </div>
+        </div>
+      </div>
+    `;
+  };
 
-  const capitalRemaining = Math.max(0, capitalAvail - allocRecord.capital);
-  const expensesRemaining = Math.max(0, expensesAvail - allocRecord.expenses);
-  const titheRemaining = Math.max(0, titheAvail - allocRecord.tithe);
-  const fullyAllocated = capitalRemaining <= 0 && expensesRemaining <= 0 && titheRemaining <= 0;
+  const jointCapital = allocatedForMonth(key, 'capital', 'joint');
+  const jointExpenses = allocatedForMonth(key, 'expenses', 'joint');
+  const jointTithe = allocatedForMonth(key, 'tithe', 'joint');
+  const jointIncome = totalIncomeForMonth(key, 'joint');
 
   document.getElementById('allocations-tab').innerHTML = `
     <div>
-      <p style="color:var(--text-dim);font-size:12px;margin:0 0 12px;">50% Capital / 40% Expenses / 10% Tithe</p>
+      <p style="color:var(--text-dim);font-size:12px;margin:0 0 16px;">50% Capital / 40% Expenses / 10% Tithe — each of you allocates from your own income until marriage.</p>
 
-      ${!fullyAllocated && totalIncome > 0 ? `
-        <div style="background:var(--panel-2); border:1px solid var(--brass-dim); border-radius:3px; padding:14px 16px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap;">
-          <div style="font-size:13px;">Allocate everything unallocated this month, split 50/40/10, in one step.</div>
-          <button id="btn-allocate-all" style="background:var(--brass); border:none; color:var(--bg); padding:9px 18px; border-radius:2px; cursor:pointer; font-weight:700; font-size:13px; white-space:nowrap;">Allocate all remaining</button>
-        </div>
-      ` : ''}
+      ${personPanel('Ant')}
+      ${personPanel('Sun')}
 
-      <div class="alloc-summary">
-        <div class="alloc-card">
-          <div class="lbl">CAPITAL (50%)</div>
-          <div class="avail">${fmt(capitalAvail)}</div>
-          <div class="alloc">Allocated: ${fmt(allocRecord.capital)}</div>
-          <div style="color:var(--brass);font-size:10px;margin-top:4px;">Available: ${fmt(capitalRemaining)}</div>
+      <div class="joint-summary">
+        <h3 style="margin:0 0 12px; font-size:15px;">Joint total, ${monthLabel()}</h3>
+        <div class="alloc-summary">
+          <div class="alloc-card">
+            <div class="lbl">CAPITAL ALLOCATED</div>
+            <div class="avail">${fmt(jointCapital)}</div>
+          </div>
+          <div class="alloc-card">
+            <div class="lbl">EXPENSES ALLOCATED</div>
+            <div class="avail">${fmt(jointExpenses)}</div>
+          </div>
+          <div class="alloc-card">
+            <div class="lbl">TITHE ALLOCATED</div>
+            <div class="avail">${fmt(jointTithe)}</div>
+          </div>
         </div>
-        <div class="alloc-card">
-          <div class="lbl">EXPENSES (40%)</div>
-          <div class="avail">${fmt(expensesAvail)}</div>
-          <div class="alloc">Allocated: ${fmt(allocRecord.expenses)}</div>
-          <div style="color:var(--brass);font-size:10px;margin-top:4px;">Available: ${fmt(expensesRemaining)}</div>
-        </div>
-        <div class="alloc-card">
-          <div class="lbl">TITHE (10%)</div>
-          <div class="avail">${fmt(titheAvail)}</div>
-          <div class="alloc">Allocated: ${fmt(allocRecord.tithe)}</div>
-          <div style="color:var(--brass);font-size:10px;margin-top:4px;">Available: ${fmt(titheRemaining)}</div>
-        </div>
+        <p style="color:var(--text-dim);font-size:11.5px;margin:10px 0 0;">Combined income logged this month: ${fmt(jointIncome)}</p>
       </div>
 
-      <p style="color:var(--text-dim);font-size:12px;margin:20px 0 10px;">Or move a specific amount to one bucket:</p>
-      <div class="alloc-transfers">
-        <div class="transfer-row">
-          <label style="margin:0;color:var(--text-dim);font-size:12px;">Transfer to Capital Engine</label>
-          <input type="number" id="transfer-capital" placeholder="Amount">
-          <button id="btn-transfer-capital">Transfer</button>
-        </div>
-        <div class="transfer-row">
-          <label style="margin:0;color:var(--text-dim);font-size:12px;">Mark Expenses as moved</label>
-          <input type="number" id="transfer-expenses" placeholder="Amount">
-          <button id="btn-transfer-expenses">Confirm</button>
-        </div>
-        <div class="transfer-row">
-          <label style="margin:0;color:var(--text-dim);font-size:12px;">Mark Tithe as moved</label>
-          <input type="number" id="transfer-tithe" placeholder="Amount">
-          <button id="btn-transfer-tithe">Confirm</button>
-        </div>
-      </div>
+      <p style="color:var(--text-dim);font-size:12px;margin:20px 0 0;">Made a mistake? Fix or remove it from the Transactions tab.</p>
     </div>
   `;
 
   wireAllocationTransfers();
 }
 
-function commitCapitalTransfer(amount, note){
+function commitCapitalTransfer(amount, note, dateStr, person){
   const year = currentPlanYear();
-  if(!DATA.years[year.year]) DATA.years[year.year] = { contributions: [], portfolio: 0 };
-  if(!DATA.years[year.year].contributions) DATA.years[year.year].contributions = [];
-  DATA.years[year.year].contributions.push({
-    id: 'a-' + Date.now() + '-' + Math.random().toString(36).slice(2,6),
-    date: new Date().toISOString().split('T')[0],
-    amount: amount,
-    note: note,
+  DATA.transactions.push({
+    id: genId(), type: 'allocation', bucket: 'capital', planYear: year.year,
+    date: dateStr || new Date().toISOString().split('T')[0],
+    amount, note, person,
   });
-}
-
-function refreshAfterCapitalChange(){
-  renderAllocationsTab();
-  renderCapitalTab();
-  renderYearsTable();
-  renderFreedomGauge();
-  refreshPortfolioLabels();
 }
 
 function wireAllocationTransfers(){
   const key = monthKey();
-  const entries = DATA.income[key] || [];
-  const totalIncome = entries.reduce((s,e) => s + (Number(e.amount)||0), 0);
-  const capitalAvail = (totalIncome * 0.5) - (DATA.allocations?.[key]?.capital || 0);
-  const expensesAvail = (totalIncome * 0.4) - (DATA.allocations?.[key]?.expenses || 0);
-  const titheAvail = (totalIncome * 0.1) - (DATA.allocations?.[key]?.tithe || 0);
+  const today = new Date().toISOString().split('T')[0];
 
-  const allocateAllBtn = document.getElementById('btn-allocate-all');
-  const transferCapital = document.getElementById('btn-transfer-capital');
-  const transferExpenses = document.getElementById('btn-transfer-expenses');
-  const transferTithe = document.getElementById('btn-transfer-tithe');
+  ['Ant','Sun'].forEach(person => {
+    const totalIncome = totalIncomeForMonth(key, person);
+    const capitalAvail = (totalIncome * 0.5) - allocatedForMonth(key, 'capital', person);
+    const expensesAvail = (totalIncome * 0.4) - allocatedForMonth(key, 'expenses', person);
+    const titheAvail = (totalIncome * 0.1) - allocatedForMonth(key, 'tithe', person);
 
-  if(allocateAllBtn){
-    allocateAllBtn.addEventListener('click', () => {
-      if(!DATA.allocations) DATA.allocations = {};
-      if(!DATA.allocations[key]) DATA.allocations[key] = { capital: 0, expenses: 0, tithe: 0 };
+    const allocateAllBtn = document.querySelector(`[data-allocate-all="${person}"]`);
+    const transferCapital = document.querySelector(`[data-btn-transfer-capital="${person}"]`);
+    const transferExpenses = document.querySelector(`[data-btn-transfer-expenses="${person}"]`);
+    const transferTithe = document.querySelector(`[data-btn-transfer-tithe="${person}"]`);
 
-      if(capitalAvail > 0){
-        DATA.allocations[key].capital += capitalAvail;
-        commitCapitalTransfer(capitalAvail, 'From ' + monthLabel() + ' allocation');
-      }
-      if(expensesAvail > 0) DATA.allocations[key].expenses += expensesAvail;
-      if(titheAvail > 0) DATA.allocations[key].tithe += titheAvail;
+    if(allocateAllBtn){
+      allocateAllBtn.addEventListener('click', () => {
+        if(capitalAvail > 0) commitCapitalTransfer(capitalAvail, 'From ' + monthLabel() + ' allocation', today, person);
+        if(expensesAvail > 0) DATA.transactions.push({ id: genId(), type:'allocation', bucket:'expenses', date: today, amount: expensesAvail, note: 'From ' + monthLabel() + ' allocation', person });
+        if(titheAvail > 0) DATA.transactions.push({ id: genId(), type:'allocation', bucket:'tithe', date: today, amount: titheAvail, note: 'From ' + monthLabel() + ' allocation', person });
+        saveData();
+        renderAllUI();
+      });
+    }
 
-      saveData();
-      refreshAfterCapitalChange();
-    });
-  }
+    if(transferCapital){
+      transferCapital.addEventListener('click', () => {
+        const input = document.querySelector(`[data-transfer-capital="${person}"]`);
+        const amount = Number(input.value) || 0;
+        if(amount <= 0 || amount > capitalAvail) { alert('Invalid amount'); return; }
+        commitCapitalTransfer(amount, 'From ' + monthLabel() + ' allocation', today, person);
+        saveData();
+        renderAllUI();
+      });
+    }
 
-  if(transferCapital){
-    transferCapital.addEventListener('click', () => {
-      const amount = Number(document.getElementById('transfer-capital').value) || 0;
-      if(amount <= 0 || amount > capitalAvail) { alert('Invalid amount'); return; }
-      if(!DATA.allocations) DATA.allocations = {};
-      if(!DATA.allocations[key]) DATA.allocations[key] = { capital: 0, expenses: 0, tithe: 0 };
-      DATA.allocations[key].capital += amount;
-      commitCapitalTransfer(amount, 'From ' + monthLabel() + ' allocation');
+    if(transferExpenses){
+      transferExpenses.addEventListener('click', () => {
+        const input = document.querySelector(`[data-transfer-expenses="${person}"]`);
+        const amount = Number(input.value) || 0;
+        if(amount <= 0 || amount > expensesAvail) { alert('Invalid amount'); return; }
+        DATA.transactions.push({ id: genId(), type:'allocation', bucket:'expenses', date: today, amount, note: 'From ' + monthLabel() + ' allocation', person });
+        saveData();
+        renderAllUI();
+      });
+    }
 
-      saveData();
-      document.getElementById('transfer-capital').value = '';
-      refreshAfterCapitalChange();
-    });
-  }
-
-  if(transferExpenses){
-    transferExpenses.addEventListener('click', () => {
-      const amount = Number(document.getElementById('transfer-expenses').value) || 0;
-      if(amount <= 0 || amount > expensesAvail) { alert('Invalid amount'); return; }
-      if(!DATA.allocations) DATA.allocations = {};
-      if(!DATA.allocations[key]) DATA.allocations[key] = { capital: 0, expenses: 0, tithe: 0 };
-      DATA.allocations[key].expenses += amount;
-      saveData();
-      document.getElementById('transfer-expenses').value = '';
-      renderAllocationsTab();
-    });
-  }
-
-  if(transferTithe){
-    transferTithe.addEventListener('click', () => {
-      const amount = Number(document.getElementById('transfer-tithe').value) || 0;
-      if(amount <= 0 || amount > titheAvail) { alert('Invalid amount'); return; }
-      if(!DATA.allocations) DATA.allocations = {};
-      if(!DATA.allocations[key]) DATA.allocations[key] = { capital: 0, expenses: 0, tithe: 0 };
-      DATA.allocations[key].tithe += amount;
-      saveData();
-      document.getElementById('transfer-tithe').value = '';
-      renderAllocationsTab();
-    });
-  }
+    if(transferTithe){
+      transferTithe.addEventListener('click', () => {
+        const input = document.querySelector(`[data-transfer-tithe="${person}"]`);
+        const amount = Number(input.value) || 0;
+        if(amount <= 0 || amount > titheAvail) { alert('Invalid amount'); return; }
+        DATA.transactions.push({ id: genId(), type:'allocation', bucket:'tithe', date: today, amount, note: 'From ' + monthLabel() + ' allocation', person });
+        saveData();
+        renderAllUI();
+      });
+    }
+  });
 }
 
 function renderCapitalTab(){
   const year = currentPlanYear();
-  const contribs = (DATA.years?.[year.year]?.contributions || []).filter(c => c.note?.includes(monthLabel()));
+  const key = monthKey();
+  const contribs = contributionsForYear(year.year).filter(c => (c.date||'').slice(0,7) === key);
   const total = contribs.reduce((s,c) => s + (Number(c.amount)||0), 0);
 
   const rows = contribs.length
@@ -732,7 +896,7 @@ function renderCapitalTab(){
 
   document.getElementById('capital-tab').innerHTML = `
     <div>
-      <p style="color:var(--text-dim);font-size:12px;margin:0 0 12px;">Allocations transferred to Capital Engine for Year ${year.year} (${year.span})</p>
+      <p style="color:var(--text-dim);font-size:12px;margin:0 0 12px;">Allocations transferred to Capital Engine for Year ${year.year} (${year.span}) · ${filterLabel()}</p>
       <table class="income-table">
         <thead>
           <tr><th>Date</th><th>Source</th><th>Amount</th></tr>
@@ -744,6 +908,145 @@ function renderCapitalTab(){
       <p style="color:var(--text-dim);font-size:12px;margin:0;">Total transferred this month: <span class="mono">${fmt(total)}</span></p>
     </div>
   `;
+}
+
+let editingTxId = null;
+
+function renderTransactionsTab(){
+  const all = DATA.transactions
+    .filter(t => matchesFilter(t))
+    .slice()
+    .sort((a,b) => (b.date||'').localeCompare(a.date||''));
+
+  const rows = all.length
+    ? all.map(t => {
+        if(editingTxId === t.id){
+          return renderEditRow(t);
+        }
+        const kind = t.type === 'income' ? 'Income' : ('Allocation → ' + t.bucket.charAt(0).toUpperCase() + t.bucket.slice(1));
+        const detail = t.type === 'income'
+          ? (t.person || '') + (t.source ? ' · ' + t.source : '')
+          : (t.note || '');
+        return `
+          <tr>
+            <td>${t.date || 'no date'}</td>
+            <td>${kind}</td>
+            <td>${detail}</td>
+            <td class="num-cell">${fmt(t.amount)}</td>
+            <td style="white-space:nowrap;">
+              <button class="delete-btn" data-edit-tx="${t.id}" style="margin-right:10px;">Edit</button>
+              <button class="delete-btn" data-delete-tx-any="${t.id}">✕</button>
+            </td>
+          </tr>
+        `;
+      }).join('')
+    : `<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:12px;">No transactions logged yet</td></tr>`;
+
+  document.getElementById('transactions-tab').innerHTML = `
+    <div>
+      <p style="color:var(--text-dim);font-size:12px;margin:0 0 12px;">Every income entry and every allocation transfer, in one place. Edit or remove anything, the totals everywhere else recalculate automatically.</p>
+      <table class="income-table">
+        <thead>
+          <tr><th>Date</th><th>Type</th><th>Detail</th><th>Amount</th><th></th></tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  wireTransactionsTab();
+}
+
+function renderEditRow(t){
+  if(t.type === 'income'){
+    return `
+      <tr>
+        <td><input type="date" id="edit-date-${t.id}" value="${t.date||''}" style="width:130px;"></td>
+        <td>Income</td>
+        <td style="display:flex; gap:6px;">
+          <select id="edit-person-${t.id}">
+            <option value="Ant" ${t.person==='Ant'?'selected':''}>Ant</option>
+            <option value="Sun" ${t.person==='Sun'?'selected':''}>Sun</option>
+          </select>
+          <input type="text" id="edit-source-${t.id}" value="${t.source||''}" placeholder="Source" style="width:110px;">
+        </td>
+        <td><input type="number" id="edit-amount-${t.id}" value="${t.amount}" style="width:100px;"></td>
+        <td style="white-space:nowrap;">
+          <button class="delete-btn" data-save-tx="${t.id}" style="margin-right:10px;color:var(--good);">Save</button>
+          <button class="delete-btn" data-cancel-edit="${t.id}">Cancel</button>
+        </td>
+      </tr>
+    `;
+  }
+  return `
+    <tr>
+      <td><input type="date" id="edit-date-${t.id}" value="${t.date||''}" style="width:130px;"></td>
+      <td>Allocation → ${t.bucket}</td>
+      <td style="display:flex; gap:6px;">
+        <select id="edit-person-${t.id}">
+          <option value="Ant" ${t.person==='Ant'?'selected':''}>Ant</option>
+          <option value="Sun" ${t.person==='Sun'?'selected':''}>Sun</option>
+        </select>
+        <input type="text" id="edit-note-${t.id}" value="${t.note||''}" placeholder="Note" style="width:130px;">
+      </td>
+      <td><input type="number" id="edit-amount-${t.id}" value="${t.amount}" style="width:100px;"></td>
+      <td style="white-space:nowrap;">
+        <button class="delete-btn" data-save-tx="${t.id}" style="margin-right:10px;color:var(--good);">Save</button>
+        <button class="delete-btn" data-cancel-edit="${t.id}">Cancel</button>
+      </td>
+    </tr>
+  `;
+}
+
+function wireTransactionsTab(){
+  document.querySelectorAll('[data-edit-tx]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      editingTxId = e.target.getAttribute('data-edit-tx');
+      renderTransactionsTab();
+    });
+  });
+
+  document.querySelectorAll('[data-cancel-edit]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      editingTxId = null;
+      renderTransactionsTab();
+    });
+  });
+
+  document.querySelectorAll('[data-save-tx]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const id = e.target.getAttribute('data-save-tx');
+      const t = findTransaction(id);
+      if(!t) return;
+
+      const dateEl = document.getElementById('edit-date-'+id);
+      const amountEl = document.getElementById('edit-amount-'+id);
+      t.date = dateEl.value || t.date;
+      t.amount = Number(amountEl.value) || 0;
+
+      if(t.type === 'income'){
+        t.person = document.getElementById('edit-person-'+id).value;
+        t.source = document.getElementById('edit-source-'+id).value;
+      }else{
+        t.note = document.getElementById('edit-note-'+id).value;
+        t.person = document.getElementById('edit-person-'+id).value;
+      }
+
+      editingTxId = null;
+      saveData();
+      renderAllUI();
+    });
+  });
+
+  document.querySelectorAll('[data-delete-tx-any]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      deleteTransaction(e.target.getAttribute('data-delete-tx-any'));
+      saveData();
+      renderAllUI();
+    });
+  });
 }
 
 function renderNav(){
@@ -778,6 +1081,12 @@ function renderMainInner(main){
     <h1 class="page-title serif">The Capital Engine</h1>
     <p class="page-sub">Build a permanent family wealth engine that compounds capital, replaces part of earned income, and creates generational wealth. The engine lives off its returns, not its capital. Planning horizon: January 2027 to December 2032.</p>
 
+    <div class="filter-bar" id="person-filter">
+      <button class="filter-btn ${viewFilter==='Ant'?'active':''}" data-filter="Ant">Ant</button>
+      <button class="filter-btn ${viewFilter==='Sun'?'active':''}" data-filter="Sun">Sun</button>
+      <button class="filter-btn ${viewFilter==='joint'?'active':''}" data-filter="joint">Joint</button>
+    </div>
+
     <section>
       <div class="section-head"><h2>How the money flows</h2></div>
       <div class="flow">
@@ -793,7 +1102,7 @@ function renderMainInner(main){
 
     <section>
       <div class="section-head">
-        <h2>This month's Capital Engine progress</h2>
+        <h2>This month's Capital Engine progress <span class="section-note" style="font-size:13px;">· ${filterLabel()}</span></h2>
         <span class="section-note">${monthLabel()}</span>
       </div>
       <div class="gauge-wrap" id="monthly-ring"></div>
@@ -805,15 +1114,17 @@ function renderMainInner(main){
         <button class="tab-btn active" data-tab="income">1. Log income</button>
         <button class="tab-btn" data-tab="allocations">2. Allocate &amp; move</button>
         <button class="tab-btn" data-tab="capital">3. Capital Engine</button>
+        <button class="tab-btn" data-tab="transactions">4. All transactions</button>
       </div>
       <div id="income-tab" class="tab-content active"></div>
       <div id="allocations-tab" class="tab-content"></div>
       <div id="capital-tab" class="tab-content"></div>
+      <div id="transactions-tab" class="tab-content"></div>
     </section>
 
     <section>
       <div class="section-head">
-        <h2>Six-year outlook</h2>
+        <h2>Six-year outlook <span class="section-note" style="font-size:13px;">· ${filterLabel()}</span></h2>
         <span class="section-note">Freedom Number: GH¢2,500,000 by end of Year 6 (2032)</span>
       </div>
       <div class="gauge-wrap" id="freedom-gauge"></div>
@@ -854,14 +1165,22 @@ function renderMainInner(main){
   renderMonthlyRing();
   renderPaceNote();
   renderTabs();
+  wireFilterBar();
+}
+
+function wireFilterBar(){
+  document.querySelectorAll('[data-filter]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      viewFilter = e.currentTarget.getAttribute('data-filter');
+      renderMain();
+    });
+  });
 }
 
 function renderMonthlyRing(){
   const year = currentPlanYear();
   const key = monthKey();
-  const contributedThisMonth = (DATA.years[year.year]?.contributions || [])
-    .filter(c => (c.date||'').startsWith(key))
-    .reduce((s,c) => s + (Number(c.amount)||0), 0);
+  const contributedThisMonth = capitalForMonth(key);
 
   const target = year.monthly;
   const p = pct(contributedThisMonth, target);
@@ -965,12 +1284,6 @@ function latestPortfolioValue(){
 
 let expandedYear = null;
 
-function yearContributed(year){
-  const y = DATA.years[year];
-  if(!y || !Array.isArray(y.contributions)) return 0;
-  return y.contributions.reduce((s,c) => s + (Number(c.amount)||0), 0);
-}
-
 function modelledPortfolios(){
   let opening = 0;
   const result = {};
@@ -992,7 +1305,7 @@ function renderYearsTable(){
     const displayValue = override > 0 ? override : modelled[y.year];
     const portfolioProgress = pct(displayValue, y.portfolio);
     const isOpen = expandedYear === y.year;
-    const entries = (d.contributions||[]).slice().sort((a,b) => (b.date||'').localeCompare(a.date||''));
+    const entries = contributionsForYear(y.year).slice().sort((a,b) => (b.date||'').localeCompare(a.date||''));
 
     const logRows = entries.length
       ? entries.map(c => `
@@ -1000,7 +1313,7 @@ function renderYearsTable(){
             <span class="log-date">${c.date || 'no date'}</span>
             <span class="log-note">${c.note || ''}</span>
             <span class="log-amount">${fmt(c.amount)}</span>
-            <button class="log-delete" data-delete-year="${y.year}" data-delete-id="${c.id}" title="Remove">✕</button>
+            <button class="log-delete" data-delete-tx="${c.id}" title="Remove">✕</button>
           </div>
         `).join('')
       : `<div class="log-empty">No contributions logged yet for this year.</div>`;
@@ -1033,6 +1346,10 @@ function renderYearsTable(){
               <input type="date" id="log-date-${y.year}">
               <input type="number" id="log-amount-${y.year}" placeholder="Amount, e.g. 50000">
               <input type="text" id="log-note-${y.year}" placeholder="Note (optional)">
+              <select id="log-person-${y.year}">
+                <option value="Ant">Ant</option>
+                <option value="Sun">Sun</option>
+              </select>
               <button data-add-year="${y.year}">Add contribution</button>
             </div>
           </div>
@@ -1051,31 +1368,31 @@ function renderYearsTable(){
 
   body.querySelectorAll('[data-add-year]').forEach(btn => {
     btn.addEventListener('click', (e) => {
-      const year = e.currentTarget.getAttribute('data-add-year');
+      const year = Number(e.currentTarget.getAttribute('data-add-year'));
       const dateEl = document.getElementById('log-date-'+year);
       const amountEl = document.getElementById('log-amount-'+year);
       const noteEl = document.getElementById('log-note-'+year);
+      const personEl = document.getElementById('log-person-'+year);
       const amount = Number(amountEl.value) || 0;
       if(amount <= 0) return;
-      if(!DATA.years[year].contributions) DATA.years[year].contributions = [];
-      DATA.years[year].contributions.push({
-        id: 'c-' + Date.now(),
+      DATA.transactions.push({
+        id: genId(), type: 'allocation', bucket: 'capital', planYear: year,
         date: dateEl.value || '',
         amount: amount,
         note: noteEl.value || '',
+        person: personEl.value,
       });
       saveData();
-      renderYearsTable();
+      renderAllUI();
     });
   });
 
-  body.querySelectorAll('[data-delete-year]').forEach(btn => {
+  body.querySelectorAll('[data-delete-tx]').forEach(btn => {
     btn.addEventListener('click', (e) => {
-      const year = e.currentTarget.getAttribute('data-delete-year');
-      const id = e.currentTarget.getAttribute('data-delete-id');
-      DATA.years[year].contributions = (DATA.years[year].contributions||[]).filter(c => c.id !== id);
+      const id = e.currentTarget.getAttribute('data-delete-tx');
+      deleteTransaction(id);
       saveData();
-      renderYearsTable();
+      renderAllUI();
     });
   });
 
@@ -1089,24 +1406,94 @@ function renderYearsTable(){
   });
 }
 
+let expandedAllocLog = false;
+
+function latestAllocationSnapshot(){
+  if(!DATA.allocationSnapshots.length) return null;
+  return DATA.allocationSnapshots.slice().sort((a,b) => (b.date||'').localeCompare(a.date||''))[0];
+}
+
 function renderAllocation(){
   const body = document.getElementById('alloc-body');
-  body.innerHTML = ALLOCATIONS.map(a => {
-    const actual = DATA.allocation[a.key] || 0;
+  const latest = latestAllocationSnapshot();
+
+  const bars = ALLOCATIONS.map(a => {
+    const actual = latest ? (Number(latest[a.key]) || 0) : 0;
     return `
       <div class="alloc-row">
         <div class="alloc-name">${a.name}<span class="pct">target ${a.target}%</span></div>
         <div class="alloc-bar-track"><div class="alloc-bar-fill" style="width:${Math.min(100,actual)}%"></div></div>
         <div class="mono" style="text-align:right;">${actual}%</div>
-        <input type="number" data-alloc="${a.key}" value="${actual}" placeholder="actual %">
       </div>
     `;
   }).join('');
 
-  body.querySelectorAll('input').forEach(inp => {
-    inp.addEventListener('change', (e) => {
-      const key = e.target.getAttribute('data-alloc');
-      DATA.allocation[key] = Number(e.target.value) || 0;
+  const snaps = DATA.allocationSnapshots.slice().sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  const logRows = snaps.length
+    ? snaps.map(s => `
+        <div class="log-entry" style="grid-template-columns:100px 1fr 1fr 1fr 1fr 28px;">
+          <span class="log-date">${s.date || 'no date'}</span>
+          <span class="log-note">RE ${s.realestate||0}%</span>
+          <span class="log-note">Stocks ${s.stocks||0}%</span>
+          <span class="log-note">Biz ${s.bizequity||0}%</span>
+          <span class="log-note">Fixed ${s.fixedincome||0}%</span>
+          <button class="log-delete" data-delete-snap="${s.id}" title="Remove">✕</button>
+        </div>
+      `).join('')
+    : `<div class="log-empty">No snapshots logged yet.</div>`;
+
+  body.innerHTML = `
+    ${bars}
+    <div style="margin-top:16px;">
+      <button class="contrib-toggle" id="toggle-alloc-log">
+        <span>${latest ? 'Last updated ' + latest.date : 'No snapshot yet'}</span>
+        <span class="toggle-caret">${expandedAllocLog ? '▴' : '▾'}</span>
+      </button>
+    </div>
+    ${expandedAllocLog ? `
+      <div class="log-panel" style="margin-top:10px;">
+        <div class="log-list">${logRows}</div>
+        <div class="log-add" style="flex-wrap:wrap;">
+          <input type="date" id="snap-date" placeholder="Date">
+          <input type="number" id="snap-realestate" placeholder="Real Estate %">
+          <input type="number" id="snap-stocks" placeholder="Stocks %">
+          <input type="number" id="snap-bizequity" placeholder="Biz Equity %">
+          <input type="number" id="snap-fixedincome" placeholder="Fixed Income %">
+          <button id="btn-add-snapshot">Log snapshot</button>
+        </div>
+      </div>
+    ` : ''}
+  `;
+
+  const toggleBtn = document.getElementById('toggle-alloc-log');
+  if(toggleBtn){
+    toggleBtn.addEventListener('click', () => {
+      expandedAllocLog = !expandedAllocLog;
+      renderAllocation();
+    });
+  }
+
+  const addSnapBtn = document.getElementById('btn-add-snapshot');
+  if(addSnapBtn){
+    addSnapBtn.addEventListener('click', () => {
+      const date = document.getElementById('snap-date').value || new Date().toISOString().split('T')[0];
+      const realestate = Number(document.getElementById('snap-realestate').value) || 0;
+      const stocks = Number(document.getElementById('snap-stocks').value) || 0;
+      const bizequity = Number(document.getElementById('snap-bizequity').value) || 0;
+      const fixedincome = Number(document.getElementById('snap-fixedincome').value) || 0;
+
+      DATA.allocationSnapshots.push({
+        id: genId(), date, realestate, stocks, bizequity, fixedincome,
+      });
+      saveData();
+      renderAllocation();
+    });
+  }
+
+  document.querySelectorAll('[data-delete-snap]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const id = e.currentTarget.getAttribute('data-delete-snap');
+      DATA.allocationSnapshots = DATA.allocationSnapshots.filter(s => s.id !== id);
       saveData();
       renderAllocation();
     });
