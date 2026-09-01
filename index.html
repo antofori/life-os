@@ -378,7 +378,7 @@ function mergeWithDefaults(loaded){
       allocationSnapshots = loaded.allocationSnapshots;
     }else if(loaded.allocation && typeof loaded.allocation === 'object' && Object.values(loaded.allocation).some(v => v > 0)){
       allocationSnapshots = [{
-        id: 'snap-migrated', date: new Date().toISOString().split('T')[0],
+        id: 'snap-migrated', date: new Date().toISOString().split('T')[0], person: 'joint',
         realestate: loaded.allocation.realestate || 0,
         stocks: loaded.allocation.stocks || 0,
         bizequity: loaded.allocation.bizequity || 0,
@@ -456,7 +456,7 @@ function mergeWithDefaults(loaded){
 
   const allocationSnapshots = (loaded.allocation && typeof loaded.allocation === 'object' && Object.values(loaded.allocation).some(v => v > 0))
     ? [{
-        id: 'snap-migrated', date: new Date().toISOString().split('T')[0],
+        id: 'snap-migrated', date: new Date().toISOString().split('T')[0], person: 'joint',
         realestate: loaded.allocation.realestate || 0,
         stocks: loaded.allocation.stocks || 0,
         bizequity: loaded.allocation.bizequity || 0,
@@ -595,6 +595,10 @@ function findTransaction(id){
   return DATA.transactions.find(t => t.id === id);
 }
 
+function confirmDelete(message){
+  return confirm(message || 'Remove this? This cannot be undone.');
+}
+
 function renderTabs(){
   wireTabs();
   renderIncomeTab();
@@ -654,6 +658,7 @@ function renderIncomeTab(){
             <option value="">Select</option>
             <option value="Ant">Ant</option>
             <option value="Sun">Sun</option>
+            <option value="Joint">Joint (shared account)</option>
           </select>
         </label>
         <label><span>Source</span><input type="text" id="income-source" placeholder="Salary, consulting"></label>
@@ -698,6 +703,7 @@ function wireIncomeForm(){
 
   document.querySelectorAll('#income-tab [data-delete-tx]').forEach(btn => {
     btn.addEventListener('click', (e) => {
+      if(!confirmDelete('Remove this income entry? This cannot be undone.')) return;
       deleteTransaction(e.target.getAttribute('data-delete-tx'));
       saveData();
       renderAllUI();
@@ -720,13 +726,15 @@ function renderAllocationsTab(){
     const expensesRemaining = Math.max(0, expensesAvail - expensesAllocated);
     const titheRemaining = Math.max(0, titheAvail - titheAllocated);
     const fullyAllocated = capitalRemaining <= 0 && expensesRemaining <= 0 && titheRemaining <= 0;
+    const title = person === 'Joint' ? 'Joint income allocation' : `${person}'s allocation`;
+    const remainingLabel = person === 'Joint' ? "the joint account's remaining income" : `${person}'s remaining income`;
 
     return `
       <div class="person-panel">
-        <h3 style="margin:0 0 12px; font-size:15px;">${person}'s allocation</h3>
+        <h3 style="margin:0 0 12px; font-size:15px;">${title}</h3>
         ${!fullyAllocated && totalIncome > 0 ? `
           <div class="quick-allocate">
-            <div style="font-size:12.5px;">Allocate ${person}'s remaining income, split 50/40/10.</div>
+            <div style="font-size:12.5px;">Allocate ${remainingLabel}, split 50/40/10.</div>
             <button data-allocate-all="${person}">Allocate all remaining</button>
           </div>
         ` : ''}
@@ -778,10 +786,11 @@ function renderAllocationsTab(){
 
   document.getElementById('allocations-tab').innerHTML = `
     <div>
-      <p style="color:var(--text-dim);font-size:12px;margin:0 0 16px;">50% Capital / 40% Expenses / 10% Tithe — each of you allocates from your own income until marriage.</p>
+      <p style="color:var(--text-dim);font-size:12px;margin:0 0 16px;">50% Capital / 40% Expenses / 10% Tithe — each of you allocates from your own income until marriage. Money you put in together goes in the Joint panel below.</p>
 
       ${personPanel('Ant')}
       ${personPanel('Sun')}
+      ${personPanel('Joint')}
 
       <div class="joint-summary">
         <h3 style="margin:0 0 12px; font-size:15px;">Joint total, ${monthLabel()}</h3>
@@ -822,7 +831,7 @@ function wireAllocationTransfers(){
   const key = monthKey();
   const today = new Date().toISOString().split('T')[0];
 
-  ['Ant','Sun'].forEach(person => {
+  ['Ant','Sun','Joint'].forEach(person => {
     const totalIncome = totalIncomeForMonth(key, person);
     const capitalAvail = (totalIncome * 0.5) - allocatedForMonth(key, 'capital', person);
     const expensesAvail = (totalIncome * 0.4) - allocatedForMonth(key, 'expenses', person);
@@ -969,6 +978,7 @@ function renderEditRow(t){
           <select id="edit-person-${t.id}">
             <option value="Ant" ${t.person==='Ant'?'selected':''}>Ant</option>
             <option value="Sun" ${t.person==='Sun'?'selected':''}>Sun</option>
+            <option value="Joint" ${t.person==='Joint'?'selected':''}>Joint</option>
           </select>
           <input type="text" id="edit-source-${t.id}" value="${t.source||''}" placeholder="Source" style="width:110px;">
         </td>
@@ -988,6 +998,7 @@ function renderEditRow(t){
         <select id="edit-person-${t.id}">
           <option value="Ant" ${t.person==='Ant'?'selected':''}>Ant</option>
           <option value="Sun" ${t.person==='Sun'?'selected':''}>Sun</option>
+          <option value="Joint" ${t.person==='Joint'?'selected':''}>Joint</option>
         </select>
         <input type="text" id="edit-note-${t.id}" value="${t.note||''}" placeholder="Note" style="width:130px;">
       </td>
@@ -1042,6 +1053,7 @@ function wireTransactionsTab(){
 
   document.querySelectorAll('[data-delete-tx-any]').forEach(btn => {
     btn.addEventListener('click', (e) => {
+      if(!confirmDelete('Remove this transaction? This cannot be undone.')) return;
       deleteTransaction(e.target.getAttribute('data-delete-tx-any'));
       saveData();
       renderAllUI();
@@ -1113,13 +1125,18 @@ function renderMainInner(main){
       <div class="tabs-nav">
         <button class="tab-btn active" data-tab="income">1. Log income</button>
         <button class="tab-btn" data-tab="allocations">2. Allocate &amp; move</button>
-        <button class="tab-btn" data-tab="capital">3. Capital Engine</button>
-        <button class="tab-btn" data-tab="transactions">4. All transactions</button>
+        <button class="tab-btn" data-tab="transactions">3. All transactions</button>
       </div>
       <div id="income-tab" class="tab-content active"></div>
       <div id="allocations-tab" class="tab-content"></div>
-      <div id="capital-tab" class="tab-content"></div>
       <div id="transactions-tab" class="tab-content"></div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <h2>Capital Engine, ${monthLabel()} <span class="section-note" style="font-size:13px;">· ${filterLabel()}</span></h2>
+      </div>
+      <div id="capital-tab"></div>
     </section>
 
     <section>
@@ -1129,6 +1146,7 @@ function renderMainInner(main){
       </div>
       <div class="gauge-wrap" id="freedom-gauge"></div>
       <p class="section-note" id="pace-note" style="margin-top:14px; text-align:center;"></p>
+      <p class="section-note" id="yoy-note" style="margin-top:6px; text-align:center;"></p>
     </section>
 
     <section>
@@ -1153,7 +1171,10 @@ function renderMainInner(main){
     </section>
 
     <section>
-      <div class="section-head"><h2>SMART goals & milestones</h2></div>
+      <div class="section-head">
+        <h2>SMART goals &amp; milestones</h2>
+        <span class="section-note">Joint — these are shared Capital Engine commitments, not split by person</span>
+      </div>
       <div id="milestones-body"></div>
     </section>
   `;
@@ -1181,6 +1202,8 @@ function renderMonthlyRing(){
   const year = currentPlanYear();
   const key = monthKey();
   const contributedThisMonth = capitalForMonth(key);
+  const hasLoggedIncome = incomeForMonth(key).length > 0;
+  const hasLoggedCapital = contributedThisMonth > 0;
 
   const target = year.monthly;
   const p = pct(contributedThisMonth, target);
@@ -1188,16 +1211,24 @@ function renderMonthlyRing(){
   const cx = 90, cy = 90, r = 74;
   const circumference = 2 * Math.PI * r;
   const offset = circumference * (1 - p/100);
+  const ringColor = hasLoggedIncome ? '#c39a5b' : '#3a4350';
 
   const svg = `
     <svg viewBox="0 0 180 180" width="180" height="180">
       <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#1b232d" stroke-width="14"/>
-      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#c39a5b" stroke-width="14" stroke-linecap="round"
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${ringColor}" stroke-width="14" stroke-linecap="round"
               stroke-dasharray="${circumference}" stroke-dashoffset="${offset}"
               transform="rotate(-90 ${cx} ${cy})"/>
       <text x="${cx}" y="${cy+8}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="24" fill="#e9e4d8">${p.toFixed(0)}%</text>
     </svg>
   `;
+
+  let statusLine = '';
+  if(!hasLoggedIncome){
+    statusLine = `<p class="section-note" style="text-align:center;margin-top:10px;color:var(--behind);">Nothing logged yet this month for ${filterLabel()} — add income to get started.</p>`;
+  }else if(!hasLoggedCapital){
+    statusLine = `<p class="section-note" style="text-align:center;margin-top:10px;">Income logged, but not yet allocated to Capital. Head to the Allocate &amp; move tab.</p>`;
+  }
 
   document.getElementById('monthly-ring').innerHTML = `
     ${svg}
@@ -1205,6 +1236,7 @@ function renderMonthlyRing(){
       <div class="cur"><div class="lbl">Contributed this month</div><div class="val">${fmt(contributedThisMonth)}</div></div>
       <div class="tgt"><div class="lbl">Year ${year.year} monthly target</div><div class="val">${fmt(target)}</div></div>
     </div>
+    ${statusLine}
   `;
 }
 
@@ -1215,6 +1247,7 @@ function renderPaceNote(){
   const months = monthsElapsedSincePlanStart();
   if(months === 0){
     el.textContent = 'The six year window starts January 2027 — nothing to compare against yet.';
+    renderYoyNote();
     return;
   }
 
@@ -1226,6 +1259,60 @@ function renderPaceNote(){
     el.innerHTML = `On pace: you've contributed <span class="mono">${fmt(actual)}</span> against an expected <span class="mono">${fmt(expected)}</span> at this point, ${fmt(diff)} ahead.`;
   }else{
     el.innerHTML = `Behind pace: you've contributed <span class="mono">${fmt(actual)}</span> against an expected <span class="mono">${fmt(expected)}</span> at this point, ${fmt(Math.abs(diff))} behind.`;
+  }
+
+  renderYoyNote();
+}
+
+function monthsElapsedInPlanYear(year){
+  const calYear = 2026 + year;
+  const now = new Date();
+  if(now.getFullYear() > calYear) return 12;
+  if(now.getFullYear() < calYear) return 0;
+  return now.getMonth() + 1;
+}
+
+function contributedInYearThroughMonth(year, monthsCount){
+  const calYear = 2026 + year;
+  return contributionsForYear(year).filter(t => {
+    const d = t.date || '';
+    if(!d || d.length < 7) return false;
+    const y = parseInt(d.slice(0,4), 10);
+    const m = parseInt(d.slice(5,7), 10);
+    return y === calYear && m <= monthsCount;
+  }).reduce((s,t) => s + (Number(t.amount)||0), 0);
+}
+
+function renderYoyNote(){
+  const el = document.getElementById('yoy-note');
+  if(!el) return;
+
+  const cy = currentPlanYear();
+  if(cy.year <= 1){
+    el.textContent = '';
+    return;
+  }
+
+  const elapsed = monthsElapsedInPlanYear(cy.year);
+  if(elapsed === 0){
+    el.textContent = '';
+    return;
+  }
+
+  const thisYearSoFar = contributedInYearThroughMonth(cy.year, elapsed);
+  const priorYearSoFar = contributedInYearThroughMonth(cy.year - 1, elapsed);
+  const diff = thisYearSoFar - priorYearSoFar;
+  const monthWord = elapsed === 1 ? 'month' : 'months';
+
+  if(priorYearSoFar === 0 && thisYearSoFar === 0){
+    el.textContent = '';
+    return;
+  }
+
+  if(diff >= 0){
+    el.innerHTML = `Through the first ${elapsed} ${monthWord} of Year ${cy.year}, you're <span class="mono">${fmt(diff)}</span> ahead of where Year ${cy.year-1} was at the same point.`;
+  }else{
+    el.innerHTML = `Through the first ${elapsed} ${monthWord} of Year ${cy.year}, you're <span class="mono">${fmt(Math.abs(diff))}</span> behind where Year ${cy.year-1} was at the same point.`;
   }
 }
 
@@ -1349,6 +1436,7 @@ function renderYearsTable(){
               <select id="log-person-${y.year}">
                 <option value="Ant">Ant</option>
                 <option value="Sun">Sun</option>
+                <option value="Joint">Joint (shared account)</option>
               </select>
               <button data-add-year="${y.year}">Add contribution</button>
             </div>
@@ -1389,6 +1477,7 @@ function renderYearsTable(){
 
   body.querySelectorAll('[data-delete-tx]').forEach(btn => {
     btn.addEventListener('click', (e) => {
+      if(!confirmDelete('Remove this contribution? This cannot be undone.')) return;
       const id = e.currentTarget.getAttribute('data-delete-tx');
       deleteTransaction(id);
       saveData();
@@ -1408,9 +1497,11 @@ function renderYearsTable(){
 
 let expandedAllocLog = false;
 
-function latestAllocationSnapshot(){
-  if(!DATA.allocationSnapshots.length) return null;
-  return DATA.allocationSnapshots.slice().sort((a,b) => (b.date||'').localeCompare(a.date||''))[0];
+function latestAllocationSnapshot(person){
+  const p = person !== undefined ? person : viewFilter;
+  const matching = DATA.allocationSnapshots.filter(s => matchesFilter(s, p));
+  if(!matching.length) return null;
+  return matching.slice().sort((a,b) => (b.date||'').localeCompare(a.date||''))[0];
 }
 
 function renderAllocation(){
@@ -1428,11 +1519,16 @@ function renderAllocation(){
     `;
   }).join('');
 
-  const snaps = DATA.allocationSnapshots.slice().sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  const snaps = DATA.allocationSnapshots
+    .filter(s => matchesFilter(s))
+    .slice()
+    .sort((a,b) => (b.date||'').localeCompare(a.date||''));
+
   const logRows = snaps.length
     ? snaps.map(s => `
-        <div class="log-entry" style="grid-template-columns:100px 1fr 1fr 1fr 1fr 28px;">
+        <div class="log-entry" style="grid-template-columns:90px 60px 1fr 1fr 1fr 1fr 28px;">
           <span class="log-date">${s.date || 'no date'}</span>
+          <span class="log-note">${s.person || 'Joint'}</span>
           <span class="log-note">RE ${s.realestate||0}%</span>
           <span class="log-note">Stocks ${s.stocks||0}%</span>
           <span class="log-note">Biz ${s.bizequity||0}%</span>
@@ -1440,13 +1536,14 @@ function renderAllocation(){
           <button class="log-delete" data-delete-snap="${s.id}" title="Remove">✕</button>
         </div>
       `).join('')
-    : `<div class="log-empty">No snapshots logged yet.</div>`;
+    : `<div class="log-empty">No snapshots logged yet for ${filterLabel()}.</div>`;
 
   body.innerHTML = `
+    <p class="section-note" style="margin-bottom:14px;">${filterLabel()}</p>
     ${bars}
     <div style="margin-top:16px;">
       <button class="contrib-toggle" id="toggle-alloc-log">
-        <span>${latest ? 'Last updated ' + latest.date : 'No snapshot yet'}</span>
+        <span>${latest ? 'Last updated ' + latest.date : 'No snapshot yet for this view'}</span>
         <span class="toggle-caret">${expandedAllocLog ? '▴' : '▾'}</span>
       </button>
     </div>
@@ -1455,6 +1552,11 @@ function renderAllocation(){
         <div class="log-list">${logRows}</div>
         <div class="log-add" style="flex-wrap:wrap;">
           <input type="date" id="snap-date" placeholder="Date">
+          <select id="snap-person">
+            <option value="Ant">Ant</option>
+            <option value="Sun">Sun</option>
+            <option value="joint">Joint</option>
+          </select>
           <input type="number" id="snap-realestate" placeholder="Real Estate %">
           <input type="number" id="snap-stocks" placeholder="Stocks %">
           <input type="number" id="snap-bizequity" placeholder="Biz Equity %">
@@ -1477,13 +1579,14 @@ function renderAllocation(){
   if(addSnapBtn){
     addSnapBtn.addEventListener('click', () => {
       const date = document.getElementById('snap-date').value || new Date().toISOString().split('T')[0];
+      const person = document.getElementById('snap-person').value;
       const realestate = Number(document.getElementById('snap-realestate').value) || 0;
       const stocks = Number(document.getElementById('snap-stocks').value) || 0;
       const bizequity = Number(document.getElementById('snap-bizequity').value) || 0;
       const fixedincome = Number(document.getElementById('snap-fixedincome').value) || 0;
 
       DATA.allocationSnapshots.push({
-        id: genId(), date, realestate, stocks, bizequity, fixedincome,
+        id: genId(), date, person, realestate, stocks, bizequity, fixedincome,
       });
       saveData();
       renderAllocation();
@@ -1492,6 +1595,7 @@ function renderAllocation(){
 
   document.querySelectorAll('[data-delete-snap]').forEach(btn => {
     btn.addEventListener('click', (e) => {
+      if(!confirmDelete('Remove this snapshot? This cannot be undone.')) return;
       const id = e.currentTarget.getAttribute('data-delete-snap');
       DATA.allocationSnapshots = DATA.allocationSnapshots.filter(s => s.id !== id);
       saveData();
