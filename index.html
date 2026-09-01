@@ -420,6 +420,28 @@ function split(amount){
   };
 }
 
+function currentPlanYear(){
+  const now = new Date();
+  const planYear = now.getFullYear() - 2026;
+  if(planYear < 1) return YEARS[0];
+  if(planYear > 6) return YEARS[YEARS.length-1];
+  return YEARS.find(y => y.year === planYear) || YEARS[0];
+}
+
+function monthsElapsedSincePlanStart(){
+  const start = new Date(2027,0,1);
+  const now = new Date();
+  if(now < start) return 0;
+  return Math.min(72, (now.getFullYear()-2027)*12 + now.getMonth() + 1);
+}
+
+function expectedContributionToDate(){
+  const flat = [];
+  YEARS.forEach(y => { for(let i=0;i<12;i++) flat.push(y.monthly); });
+  const months = monthsElapsedSincePlanStart();
+  return flat.slice(0, months).reduce((s,v)=>s+v, 0);
+}
+
 function pct(actual, target){
   if(!target) return 0;
   return Math.max(0, Math.min(100, (actual/target)*100));
@@ -540,30 +562,44 @@ function renderAllocationsTab(){
   if(!DATA.allocations) DATA.allocations = {};
   const allocRecord = DATA.allocations[key] || { capital: 0, expenses: 0, tithe: 0 };
 
+  const capitalRemaining = Math.max(0, capitalAvail - allocRecord.capital);
+  const expensesRemaining = Math.max(0, expensesAvail - allocRecord.expenses);
+  const titheRemaining = Math.max(0, titheAvail - allocRecord.tithe);
+  const fullyAllocated = capitalRemaining <= 0 && expensesRemaining <= 0 && titheRemaining <= 0;
+
   document.getElementById('allocations-tab').innerHTML = `
     <div>
       <p style="color:var(--text-dim);font-size:12px;margin:0 0 12px;">50% Capital / 40% Expenses / 10% Tithe</p>
+
+      ${!fullyAllocated && totalIncome > 0 ? `
+        <div style="background:var(--panel-2); border:1px solid var(--brass-dim); border-radius:3px; padding:14px 16px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap;">
+          <div style="font-size:13px;">Allocate everything unallocated this month, split 50/40/10, in one step.</div>
+          <button id="btn-allocate-all" style="background:var(--brass); border:none; color:var(--bg); padding:9px 18px; border-radius:2px; cursor:pointer; font-weight:700; font-size:13px; white-space:nowrap;">Allocate all remaining</button>
+        </div>
+      ` : ''}
+
       <div class="alloc-summary">
         <div class="alloc-card">
           <div class="lbl">CAPITAL (50%)</div>
           <div class="avail">${fmt(capitalAvail)}</div>
           <div class="alloc">Allocated: ${fmt(allocRecord.capital)}</div>
-          <div style="color:var(--brass);font-size:10px;margin-top:4px;">Available: ${fmt(Math.max(0, capitalAvail - allocRecord.capital))}</div>
+          <div style="color:var(--brass);font-size:10px;margin-top:4px;">Available: ${fmt(capitalRemaining)}</div>
         </div>
         <div class="alloc-card">
           <div class="lbl">EXPENSES (40%)</div>
           <div class="avail">${fmt(expensesAvail)}</div>
           <div class="alloc">Allocated: ${fmt(allocRecord.expenses)}</div>
-          <div style="color:var(--brass);font-size:10px;margin-top:4px;">Available: ${fmt(Math.max(0, expensesAvail - allocRecord.expenses))}</div>
+          <div style="color:var(--brass);font-size:10px;margin-top:4px;">Available: ${fmt(expensesRemaining)}</div>
         </div>
         <div class="alloc-card">
           <div class="lbl">TITHE (10%)</div>
           <div class="avail">${fmt(titheAvail)}</div>
           <div class="alloc">Allocated: ${fmt(allocRecord.tithe)}</div>
-          <div style="color:var(--brass);font-size:10px;margin-top:4px;">Available: ${fmt(Math.max(0, titheAvail - allocRecord.tithe))}</div>
+          <div style="color:var(--brass);font-size:10px;margin-top:4px;">Available: ${fmt(titheRemaining)}</div>
         </div>
       </div>
 
+      <p style="color:var(--text-dim);font-size:12px;margin:20px 0 10px;">Or move a specific amount to one bucket:</p>
       <div class="alloc-transfers">
         <div class="transfer-row">
           <label style="margin:0;color:var(--text-dim);font-size:12px;">Transfer to Capital Engine</label>
@@ -587,6 +623,26 @@ function renderAllocationsTab(){
   wireAllocationTransfers();
 }
 
+function commitCapitalTransfer(amount, note){
+  const year = currentPlanYear();
+  if(!DATA.years[year.year]) DATA.years[year.year] = { contributions: [], portfolio: 0 };
+  if(!DATA.years[year.year].contributions) DATA.years[year.year].contributions = [];
+  DATA.years[year.year].contributions.push({
+    id: 'a-' + Date.now() + '-' + Math.random().toString(36).slice(2,6),
+    date: new Date().toISOString().split('T')[0],
+    amount: amount,
+    note: note,
+  });
+}
+
+function refreshAfterCapitalChange(){
+  renderAllocationsTab();
+  renderCapitalTab();
+  renderYearsTable();
+  renderFreedomGauge();
+  refreshPortfolioLabels();
+}
+
 function wireAllocationTransfers(){
   const key = monthKey();
   const entries = DATA.income[key] || [];
@@ -595,9 +651,27 @@ function wireAllocationTransfers(){
   const expensesAvail = (totalIncome * 0.4) - (DATA.allocations?.[key]?.expenses || 0);
   const titheAvail = (totalIncome * 0.1) - (DATA.allocations?.[key]?.tithe || 0);
 
+  const allocateAllBtn = document.getElementById('btn-allocate-all');
   const transferCapital = document.getElementById('btn-transfer-capital');
   const transferExpenses = document.getElementById('btn-transfer-expenses');
   const transferTithe = document.getElementById('btn-transfer-tithe');
+
+  if(allocateAllBtn){
+    allocateAllBtn.addEventListener('click', () => {
+      if(!DATA.allocations) DATA.allocations = {};
+      if(!DATA.allocations[key]) DATA.allocations[key] = { capital: 0, expenses: 0, tithe: 0 };
+
+      if(capitalAvail > 0){
+        DATA.allocations[key].capital += capitalAvail;
+        commitCapitalTransfer(capitalAvail, 'From ' + monthLabel() + ' allocation');
+      }
+      if(expensesAvail > 0) DATA.allocations[key].expenses += expensesAvail;
+      if(titheAvail > 0) DATA.allocations[key].tithe += titheAvail;
+
+      saveData();
+      refreshAfterCapitalChange();
+    });
+  }
 
   if(transferCapital){
     transferCapital.addEventListener('click', () => {
@@ -606,21 +680,11 @@ function wireAllocationTransfers(){
       if(!DATA.allocations) DATA.allocations = {};
       if(!DATA.allocations[key]) DATA.allocations[key] = { capital: 0, expenses: 0, tithe: 0 };
       DATA.allocations[key].capital += amount;
-      
-      // Add to Capital Engine for current year (Year 1 for now)
-      if(!DATA.years[1].contributions) DATA.years[1].contributions = [];
-      DATA.years[1].contributions.push({
-        id: 'a-' + Date.now(),
-        date: new Date().toISOString().split('T')[0],
-        amount: amount,
-        note: 'From ' + monthLabel() + ' allocation',
-      });
+      commitCapitalTransfer(amount, 'From ' + monthLabel() + ' allocation');
 
       saveData();
       document.getElementById('transfer-capital').value = '';
-      renderAllocationsTab();
-      renderCapitalTab();
-      renderYearsTable();
+      refreshAfterCapitalChange();
     });
   }
 
@@ -652,12 +716,12 @@ function wireAllocationTransfers(){
 }
 
 function renderCapitalTab(){
-  const key = monthKey();
-  const year1Contribs = (DATA.years?.[1]?.contributions || []).filter(c => c.note?.includes(monthLabel()));
-  const total = year1Contribs.reduce((s,c) => s + (Number(c.amount)||0), 0);
+  const year = currentPlanYear();
+  const contribs = (DATA.years?.[year.year]?.contributions || []).filter(c => c.note?.includes(monthLabel()));
+  const total = contribs.reduce((s,c) => s + (Number(c.amount)||0), 0);
 
-  const rows = year1Contribs.length
-    ? year1Contribs.map(c => `
+  const rows = contribs.length
+    ? contribs.map(c => `
         <tr>
           <td>${c.date || ''}</td>
           <td>${c.note || ''}</td>
@@ -668,7 +732,7 @@ function renderCapitalTab(){
 
   document.getElementById('capital-tab').innerHTML = `
     <div>
-      <p style="color:var(--text-dim);font-size:12px;margin:0 0 12px;">Allocations transferred to Capital Engine for Year 1</p>
+      <p style="color:var(--text-dim);font-size:12px;margin:0 0 12px;">Allocations transferred to Capital Engine for Year ${year.year} (${year.span})</p>
       <table class="income-table">
         <thead>
           <tr><th>Date</th><th>Source</th><th>Amount</th></tr>
@@ -677,7 +741,7 @@ function renderCapitalTab(){
           ${rows}
         </tbody>
       </table>
-      <p style="color:var(--text-dim);font-size:12px;margin:0;">Total transferred: <span class="mono">${fmt(total)}</span></p>
+      <p style="color:var(--text-dim);font-size:12px;margin:0;">Total transferred this month: <span class="mono">${fmt(total)}</span></p>
     </div>
   `;
 }
@@ -729,17 +793,17 @@ function renderMainInner(main){
 
     <section>
       <div class="section-head">
-        <h2>Progress to the Freedom Number</h2>
-        <span class="section-note">Target: GH¢2,500,000 by end of Year 6 (2032)</span>
+        <h2>This month's Capital Engine progress</h2>
+        <span class="section-note">${monthLabel()}</span>
       </div>
-      <div class="gauge-wrap" id="freedom-gauge"></div>
+      <div class="gauge-wrap" id="monthly-ring"></div>
     </section>
 
     <section>
       <div class="section-head"><h2>Cash allocation system</h2></div>
       <div class="tabs-nav">
-        <button class="tab-btn active" data-tab="income">1. Income</button>
-        <button class="tab-btn" data-tab="allocations">2. Allocations</button>
+        <button class="tab-btn active" data-tab="income">1. Log income</button>
+        <button class="tab-btn" data-tab="allocations">2. Allocate &amp; move</button>
         <button class="tab-btn" data-tab="capital">3. Capital Engine</button>
       </div>
       <div id="income-tab" class="tab-content active"></div>
@@ -749,8 +813,17 @@ function renderMainInner(main){
 
     <section>
       <div class="section-head">
+        <h2>Six-year outlook</h2>
+        <span class="section-note">Freedom Number: GH¢2,500,000 by end of Year 6 (2032)</span>
+      </div>
+      <div class="gauge-wrap" id="freedom-gauge"></div>
+      <p class="section-note" id="pace-note" style="margin-top:14px; text-align:center;"></p>
+    </section>
+
+    <section>
+      <div class="section-head">
         <h2>Asset allocation · CE-04 to CE-07</h2>
-        <span class="section-note">Current portfolio value: ${fmt(latestPortfolio)}</span>
+        <span class="section-note" id="alloc-portfolio-note">Current portfolio value: ${fmt(latestPortfolio)}</span>
       </div>
       <div id="alloc-body"></div>
     </section>
@@ -758,26 +831,7 @@ function renderMainInner(main){
     <section>
       <div class="section-head">
         <h2>Six year contribution schedule</h2>
-        <span class="section-note">Target by March 2027: GH¢33,000 combined</span>
-      </div>
-      <div class="month-label">${monthLabel()}</div>
-      <div class="income-input-row">
-        <div class="who-input">
-          <label>Ant, monthly income</label>
-          <input type="number" id="input-you" value="${((DATA.months && DATA.months[monthKey()]) || {}).you || ''}" placeholder="0">
-        </div>
-        <div class="who-input">
-          <label>Sun, monthly income</label>
-          <input type="number" id="input-her" value="${((DATA.months && DATA.months[monthKey()]) || {}).her || ''}" placeholder="0">
-        </div>
-      </div>
-      <div class="grid3" id="income-dashboard"></div>
-    </section>
-
-    <section>
-      <div class="section-head">
-        <h2>Six year contribution schedule</h2>
-        <span class="section-note">Total contributed so far: ${fmt(totalContributed)} of ${fmt(targetContributed)} planned</span>
+        <span class="section-note" id="total-contributed-note">Total contributed so far: ${fmt(totalContributed)} of ${fmt(targetContributed)} planned</span>
       </div>
       <table>
         <thead>
@@ -797,7 +851,63 @@ function renderMainInner(main){
   renderAllocation();
   renderMilestones();
   renderFreedomGauge();
+  renderMonthlyRing();
+  renderPaceNote();
   renderTabs();
+}
+
+function renderMonthlyRing(){
+  const year = currentPlanYear();
+  const key = monthKey();
+  const contributedThisMonth = (DATA.years[year.year]?.contributions || [])
+    .filter(c => (c.date||'').startsWith(key))
+    .reduce((s,c) => s + (Number(c.amount)||0), 0);
+
+  const target = year.monthly;
+  const p = pct(contributedThisMonth, target);
+
+  const cx = 90, cy = 90, r = 74;
+  const circumference = 2 * Math.PI * r;
+  const offset = circumference * (1 - p/100);
+
+  const svg = `
+    <svg viewBox="0 0 180 180" width="180" height="180">
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#1b232d" stroke-width="14"/>
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#c39a5b" stroke-width="14" stroke-linecap="round"
+              stroke-dasharray="${circumference}" stroke-dashoffset="${offset}"
+              transform="rotate(-90 ${cx} ${cy})"/>
+      <text x="${cx}" y="${cy+8}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="24" fill="#e9e4d8">${p.toFixed(0)}%</text>
+    </svg>
+  `;
+
+  document.getElementById('monthly-ring').innerHTML = `
+    ${svg}
+    <div class="gauge-figures">
+      <div class="cur"><div class="lbl">Contributed this month</div><div class="val">${fmt(contributedThisMonth)}</div></div>
+      <div class="tgt"><div class="lbl">Year ${year.year} monthly target</div><div class="val">${fmt(target)}</div></div>
+    </div>
+  `;
+}
+
+function renderPaceNote(){
+  const el = document.getElementById('pace-note');
+  if(!el) return;
+
+  const months = monthsElapsedSincePlanStart();
+  if(months === 0){
+    el.textContent = 'The six year window starts January 2027 — nothing to compare against yet.';
+    return;
+  }
+
+  const expected = expectedContributionToDate();
+  const actual = YEARS.reduce((s,y) => s + yearContributed(y.year), 0);
+  const diff = actual - expected;
+
+  if(diff >= 0){
+    el.innerHTML = `On pace: you've contributed <span class="mono">${fmt(actual)}</span> against an expected <span class="mono">${fmt(expected)}</span> at this point, ${fmt(diff)} ahead.`;
+  }else{
+    el.innerHTML = `Behind pace: you've contributed <span class="mono">${fmt(actual)}</span> against an expected <span class="mono">${fmt(expected)}</span> at this point, ${fmt(Math.abs(diff))} behind.`;
+  }
 }
 
 function renderFreedomGauge(){
@@ -827,6 +937,21 @@ function renderFreedomGauge(){
   `;
 }
 
+function refreshPortfolioLabels(){
+  const allocNote = document.getElementById('alloc-portfolio-note');
+  if(allocNote) allocNote.textContent = 'Current portfolio value: ' + fmt(latestPortfolioValue());
+
+  const totalNote = document.getElementById('total-contributed-note');
+  if(totalNote){
+    const totalContributed = YEARS.reduce((s,y) => s + yearContributed(y.year), 0);
+    const targetContributed = YEARS.reduce((s,y) => s + y.annual, 0);
+    totalNote.textContent = 'Total contributed so far: ' + fmt(totalContributed) + ' of ' + fmt(targetContributed) + ' planned';
+  }
+
+  renderMonthlyRing();
+  renderPaceNote();
+}
+
 function latestPortfolioValue(){
   const modelled = modelledPortfolios();
   let latest = 0;
@@ -836,51 +961,6 @@ function latestPortfolioValue(){
     if(val > 0) latest = val;
   });
   return latest;
-}
-
-function renderIncomeDashboard(){
-  const key = monthKey();
-  const rec = (DATA.months && DATA.months[key]) || { you:0, her:0 };
-  const you = Number(rec.you) || 0;
-  const her = Number(rec.her) || 0;
-  const combined = you + her;
-
-  const sYou = split(you);
-  const sHer = split(her);
-  const sCombined = split(combined);
-
-  const panel = (label, income, s, combinedClass) => `
-    <div class="card ${combinedClass||''}">
-      <div class="who">${label}</div>
-      <div class="stat-big">${fmt(income)}<span style="font-size:12px;color:var(--text-dim);">/mo</span></div>
-      <div class="split-row"><span class="split-lbl">Capital<span class="tag">50%</span></span><span class="split-val">${fmt(s.capital)}</span></div>
-      <div class="split-row"><span class="split-lbl">Expenses<span class="tag">40%</span></span><span class="split-val">${fmt(s.expenses)}</span></div>
-      <div class="split-row"><span class="split-lbl">Tithe<span class="tag">10%</span></span><span class="split-val">${fmt(s.tithe)}</span></div>
-    </div>
-  `;
-
-  document.getElementById('income-dashboard').innerHTML =
-    panel('Ant', you, sYou) +
-    panel('Sun', her, sHer) +
-    panel('Combined household', combined, sCombined, 'combined-card');
-}
-
-function wireIncomeInputs(){
-  const key = monthKey();
-  const you = document.getElementById('input-you');
-  const her = document.getElementById('input-her');
-
-  function persist(){
-    if(!DATA.months) DATA.months = {};
-    if(!DATA.months[key]) DATA.months[key] = { you:0, her:0 };
-    DATA.months[key].you = Number(you.value) || 0;
-    DATA.months[key].her = Number(her.value) || 0;
-    saveData();
-    renderIncomeDashboard();
-  }
-
-  you.addEventListener('input', persist);
-  her.addEventListener('input', persist);
 }
 
 let expandedYear = null;
