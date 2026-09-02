@@ -3,10 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>The Capital Engine — Five Year Tracker</title>
+<title>Our Life OS — Five Year Plan</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
 <style>
+
   :root{
     --bg:#10151b;
     --panel:#161d25;
@@ -271,25 +274,163 @@
     .grid3{ grid-template-columns:1fr; }
     .alloc-row{ grid-template-columns:1fr; gap:6px; }
   }
+
+
+  :root{
+    --bg:#10151b; --panel:#161d25; --panel-2:#1b232d; --line:#2a323d;
+    --text:#e9e4d8; --text-dim:#8b95a1; --brass:#c39a5b; --brass-dim:#8a713f;
+    --good:#7a9b7e; --behind:#b0654f; --neutral:#5c6773;
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; background:var(--bg); color:var(--text); font-family:'IBM Plex Sans', sans-serif; }
+  h1,h2,h3,.serif{ font-family:'Spectral', serif; }
+  .mono{ font-family:'IBM Plex Mono', monospace; }
+
+  .app{ display:flex; min-height:100vh; }
+  .nav{ width:230px; flex-shrink:0; background:var(--panel); border-right:1px solid var(--line); padding:28px 0; position:sticky; top:0; height:100vh; overflow-y:auto; }
+  .nav-brand{ padding:0 20px 22px 20px; border-bottom:1px solid var(--line); margin-bottom:10px; }
+  .nav-brand .kicker{ color:var(--brass); font-size:11px; letter-spacing:.04em; }
+  .nav-brand h1{ font-size:19px; margin:4px 0 0 0; line-height:1.25; font-weight:600; }
+  .pillar-item{ display:block; gap:12px; padding:12px 20px; cursor:pointer; border-left:2px solid transparent; color:var(--text-dim); text-decoration:none; }
+  .pillar-item .num{ font-family:'IBM Plex Mono', monospace; font-size:12px; display:block; }
+  .pillar-item .name{ font-size:13.5px; line-height:1.35; }
+  .pillar-item.active{ background:var(--panel-2); border-left:2px solid var(--brass); color:var(--text); }
+  .pillar-item.active .num{ color:var(--brass); }
+  .pillar-item.disabled{ opacity:.4; pointer-events:none; }
+
+  .main{ flex:1; padding:44px 56px 80px 56px; max-width:1080px; }
+  .eyebrow{ color:var(--brass); font-size:12px; margin-bottom:6px; }
+  .page-title{ font-size:34px; font-weight:600; margin:0 0 10px 0; }
+  .page-sub{ color:var(--text-dim); max-width:680px; line-height:1.55; margin-bottom:24px; font-size:14.5px; }
+
+  .filter-bar{ display:flex; gap:6px; margin-bottom:24px; }
+  .filter-btn{ background:var(--panel); border:1px solid var(--line); color:var(--text-dim); padding:8px 16px; border-radius:20px; cursor:pointer; font-size:12.5px; font-weight:500; }
+  .filter-btn.active{ background:var(--brass); border-color:var(--brass); color:var(--bg); font-weight:700; }
+  .filter-btn:hover:not(.active){ border-color:var(--brass-dim); color:var(--text); }
+
+  .tabs-nav{ display:flex; gap:2px; margin-bottom:24px; border-bottom:1px solid var(--line); overflow-x:auto; }
+  .tab-btn{ background:none; border:none; padding:12px 14px; color:var(--text-dim); font-size:13px; cursor:pointer; border-bottom:2px solid transparent; white-space:nowrap; }
+  .tab-btn.active{ color:var(--text); border-bottom-color:var(--brass); }
+  .tab-btn:hover:not(.active){ color:var(--text); }
+  .tab-content{ display:none; }
+  .tab-content.active{ display:block; }
+
+  section{ margin-bottom:44px; }
+  .section-head{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px; border-bottom:1px solid var(--line); padding-bottom:10px; flex-wrap:wrap; gap:6px; }
+  .section-head h2{ font-size:18px; margin:0; font-weight:600; }
+  .section-head h3{ font-size:14.5px; margin:20px 0 10px; font-weight:600; color:var(--brass); }
+  .section-note{ color:var(--text-dim); font-size:12.5px; }
+
+  .stat-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:24px; }
+  .stat-card{ background:var(--panel); border:1px solid var(--line); border-radius:3px; padding:16px; }
+  .stat-card .lbl{ font-size:11px; color:var(--text-dim); margin-bottom:6px; }
+  .stat-card .val{ font-family:'IBM Plex Mono', monospace; font-size:22px; }
+
+  table{ width:100%; border-collapse:collapse; font-size:12.5px; margin-bottom:4px; }
+  thead th{ text-align:left; color:var(--text-dim); font-weight:500; font-size:11px; letter-spacing:.02em; padding:8px; border-bottom:1px solid var(--line); }
+  tbody td{ padding:8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  tbody tr:last-child td{ border-bottom:none; }
+  .num-cell{ font-family:'IBM Plex Mono', monospace; text-align:center; }
+  .badge{ font-size:10px; padding:2px 7px; border-radius:10px; font-weight:600; letter-spacing:.02em; }
+  .badge-core{ background:rgba(195,154,91,.18); color:var(--brass); }
+  .badge-support{ background:rgba(139,149,161,.18); color:var(--text-dim); }
+  .skill-name{ font-size:13px; }
+  .skill-evidence{ font-size:11px; color:var(--text-dim); margin-top:3px; }
+  .lvl-select{ background:var(--panel-2); border:1px solid var(--line); color:var(--text); padding:5px 6px; border-radius:2px; font-family:'IBM Plex Mono', monospace; font-size:12px; width:100%; }
+  .lvl-select:focus{ outline:none; border-color:var(--brass-dim); }
+  .target-cell{ font-family:'IBM Plex Mono', monospace; text-align:center; font-size:11px; color:var(--text-dim); }
+  .target-cell.current{ color:var(--brass); font-weight:700; }
+  .notes-input{ width:100%; background:var(--panel-2); border:1px solid var(--line); color:var(--text); padding:5px 6px; border-radius:2px; font-size:11.5px; }
+  .activity-toggle{ background:none; border:none; color:var(--brass-dim); cursor:pointer; font-size:11px; padding:0; text-decoration:underline; }
+  .activity-panel{ background:var(--panel-2); padding:10px 12px; border-radius:2px; margin-top:6px; }
+  .activity-entry{ display:flex; gap:10px; padding:5px 0; border-bottom:1px solid var(--line); font-size:11.5px; align-items:center; }
+  .activity-entry:last-child{ border-bottom:none; }
+  .activity-entry .a-date{ color:var(--brass-dim); font-family:'IBM Plex Mono', monospace; width:85px; flex-shrink:0; }
+  .activity-entry .a-note{ flex:1; }
+  .activity-entry button{ background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:11px; }
+  .activity-add{ display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+  .activity-add input{ background:var(--panel); border:1px solid var(--line); color:var(--text); padding:5px 7px; border-radius:2px; font-size:11px; }
+  .activity-add input[type="text"]{ flex:1; min-width:140px; }
+  .activity-add button{ background:var(--brass-dim); border:none; color:var(--bg); padding:5px 12px; border-radius:2px; cursor:pointer; font-weight:600; font-size:11px; }
+  .activity-add button:hover{ background:var(--brass); }
+  .domain-count{ color:var(--text-dim); font-size:11.5px; margin-bottom:14px; }
+
+  .arc-year{ background:var(--panel); border:1px solid var(--line); border-radius:3px; padding:18px 20px; margin-bottom:14px; }
+  .arc-year.current{ border-color:var(--brass-dim); }
+  .arc-year h3{ margin:0 0 4px; font-size:15px; color:var(--text); }
+  .arc-year .span{ font-size:11.5px; color:var(--text-dim); margin-bottom:12px; }
+  .arc-cols{ display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  .arc-col h4{ margin:0 0 6px; font-size:12px; color:var(--brass); }
+  .arc-col ul{ margin:0; padding-left:18px; font-size:12.5px; line-height:1.6; color:var(--text-dim); }
+
+  .form-grid{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; align-items:flex-end; }
+  .form-grid label{ display:flex; flex-direction:column; gap:4px; font-size:11px; color:var(--text-dim); }
+  .form-grid input, .form-grid select, .form-grid textarea{ background:var(--panel-2); border:1px solid var(--line); color:var(--text); padding:7px 9px; border-radius:2px; font-size:12.5px; font-family:'IBM Plex Sans', sans-serif; }
+  .form-grid textarea{ min-width:220px; min-height:36px; font-family:inherit; }
+  .form-grid button{ background:var(--brass-dim); border:none; color:var(--bg); padding:8px 16px; border-radius:2px; cursor:pointer; font-weight:700; font-size:12.5px; }
+  .form-grid button:hover{ background:var(--brass); }
+
+  .entry-card{ background:var(--panel); border:1px solid var(--line); border-radius:3px; padding:14px 16px; margin-bottom:10px; }
+  .entry-card .meta{ display:flex; justify-content:space-between; font-size:11px; color:var(--text-dim); margin-bottom:6px; }
+  .entry-card .title{ font-size:13.5px; margin-bottom:4px; }
+  .entry-card .body{ font-size:12.5px; color:var(--text-dim); line-height:1.5; }
+  .entry-card .delete{ background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:11px; float:right; }
+  .entry-card .delete:hover{ color:var(--behind); }
+
+  .review-card{ background:var(--panel); border:1px solid var(--line); border-radius:3px; padding:18px 20px; margin-bottom:14px; }
+  .review-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px 20px; margin-top:10px; }
+  .review-item{ font-size:12px; }
+  .review-item .k{ color:var(--brass); font-weight:600; font-size:11px; letter-spacing:.03em; }
+  .review-item .v{ color:var(--text-dim); margin-top:2px; line-height:1.5; }
+
+  .model-card{ background:var(--panel); border:1px solid var(--line); border-radius:3px; padding:18px 20px; margin-bottom:14px; }
+  .model-card h3{ margin:0 0 6px; font-size:15px; }
+  .model-card .tag{ color:var(--brass); font-size:11px; margin-bottom:10px; }
+  .model-card p{ font-size:12.5px; color:var(--text-dim); line-height:1.6; margin:0; }
+
+  .save-note{ position:fixed; bottom:18px; right:24px; font-size:11.5px; color:var(--text-dim); background:var(--panel); border:1px solid var(--line); padding:7px 12px; border-radius:3px; opacity:0; transition:opacity .4s ease; }
+  .save-note.show{ opacity:1; }
+  .placeholder{ color:var(--text-dim); padding:20px; text-align:center; border:1px dashed var(--line); border-radius:3px; }
+
+  @media (max-width:820px){
+    .app{ flex-direction:column; }
+    .nav{ width:100%; height:auto; position:relative; }
+    .main{ padding:28px 18px 60px 18px; }
+    .arc-cols{ grid-template-columns:1fr; }
+    .review-grid{ grid-template-columns:1fr; }
+  }
+
+
+  /* TOP NAV (replaces sidebar, mobile-friendly) */
+  .topnav{
+    position:sticky; top:0; z-index:30;
+    background:var(--panel); border-bottom:1px solid var(--line);
+    display:flex; align-items:center; gap:14px;
+    padding:12px 24px; overflow-x:auto; white-space:nowrap;
+  }
+  .topnav-brand{ font-family:'Spectral', serif; font-weight:600; color:var(--brass); font-size:13px; letter-spacing:.03em; flex-shrink:0; }
+  .topnav-items{ display:flex; gap:6px; }
+  .topnav-item{ padding:8px 14px; border-radius:20px; font-size:12.5px; color:var(--text-dim); cursor:pointer; flex-shrink:0; }
+  .topnav-item.active{ background:var(--brass); color:var(--bg); font-weight:700; }
+  .topnav-item.disabled{ opacity:.35; cursor:default; }
+  .topnav-item:hover:not(.disabled):not(.active){ color:var(--text); background:var(--panel-2); }
+
+  .main{ max-width:1080px; margin:0 auto; padding:36px 40px 80px 40px; }
+
+  @media (max-width:820px){
+    .topnav{ padding:10px 14px; gap:10px; }
+    .topnav-brand{ display:none; }
+    .main{ padding:22px 16px 60px 16px; }
+  }
+
 </style>
 </head>
 <body>
 
-<div class="app">
-  <nav class="nav">
-    <div class="nav-brand">
-      <div class="kicker">FIVE YEAR PLAN · 2027–2032</div>
-      <h1>Build Yourselves,<br>Build Your Life,<br>Build Your Capital</h1>
-    </div>
-    <div id="nav-list"></div>
-  </nav>
-  <main class="main" id="main"></main>
-</div>
-
+<div class="topnav" id="topnav"></div>
+<main class="main" id="main"></main>
 <div class="save-note" id="saveNote">Saved</div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-config.js"></script>
 <script>
 const SUPABASE_CONFIG = window.LIFE_OS_SUPABASE;
 if (!SUPABASE_CONFIG || !SUPABASE_CONFIG.url || !SUPABASE_CONFIG.publishableKey) {
@@ -297,6 +438,7 @@ if (!SUPABASE_CONFIG || !SUPABASE_CONFIG.url || !SUPABASE_CONFIG.publishableKey)
 }
 const db = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.publishableKey);
 
+const Pillar1 = (function(){
 const PILLARS = [
   { id:1, name:"Wealth & Financial Independence", short:"The Capital Engine", enabled:true },
   { id:2, name:"Career & Mastery", enabled:false },
@@ -1634,6 +1776,823 @@ function renderMilestones(){
   });
 }
 
+  let __loaded = false;
+  async function ensureLoaded(){
+    if(__loaded) return;
+    DATA = defaultData();
+    renderMain();
+    try{ await loadData(); }catch(e){ console.error('Pillar 1 load error', e); }
+    __loaded = true;
+  }
+  function render(){ renderMain(); }
+  return { ensureLoaded, render };
+})();
+
+const Pillar2 = (function(){
+const PILLARS = [
+  { id:1, name:"Wealth & Financial Independence", enabled:true, href:"index.html" },
+  { id:2, name:"Career & Mastery", enabled:true, href:"pillar-2.html", current:true },
+  { id:3, name:"Business & Entrepreneurship", enabled:false },
+  { id:4, name:"Voice, Influence & Public Life", enabled:false },
+  { id:5, name:"Community & Relationships", enabled:false },
+  { id:6, name:"Marriage & Family", enabled:false },
+  { id:7, name:"Life Infrastructure", enabled:false },
+  { id:8, name:"Health, Faith & Life", enabled:false },
+];
+
+/* ===== PILLAR 2 TIMELINE (distinct from the Capital Engine's Jan2027–Dec2032 window) ===== */
+const PILLAR2_YEARS = [
+  { year:1, label:"Year 1", span:"Oct 2026 – Sep 2027", start:new Date(2026,9,1), end:new Date(2027,9,1) },
+  { year:2, label:"Year 2", span:"Oct 2027 – Sep 2028", start:new Date(2027,9,1), end:new Date(2028,9,1) },
+  { year:3, label:"Year 3", span:"Oct 2028 – Sep 2029", start:new Date(2028,9,1), end:new Date(2029,9,1) },
+  { year:4, label:"Year 4", span:"Oct 2029 – Sep 2030", start:new Date(2029,9,1), end:new Date(2030,9,1) },
+  { year:5, label:"Year 5", span:"Oct 2030 – Sep 2031", start:new Date(2030,9,1), end:new Date(2031,9,1) },
+];
+
+function currentPillar2Year(){
+  const now = new Date();
+  for(const y of PILLAR2_YEARS){ if(now >= y.start && now < y.end) return y; }
+  if(now < PILLAR2_YEARS[0].start) return PILLAR2_YEARS[0];
+  return PILLAR2_YEARS[PILLAR2_YEARS.length-1];
+}
+
+const TYPE_TARGETS = {
+  Core:{ y1:2, y3:4, y5:6 },
+  Supporting:{ y1:1, y3:3, y5:4 },
+};
+
+/* ===== THE LOCKED SKILL REGISTRY ===== */
+const ANT_SKILLS = [
+  ["Founder","A. Strategic & Commercial","Strategy & strategic thinking","Core","A written strategic plan you executed with a measurable outcome"],
+  ["Founder","A. Strategic & Commercial","Business models","Core","Designed or redesigned a business model that shipped"],
+  ["Founder","A. Strategic & Commercial","Market analysis","Core","A market analysis that shaped a real decision"],
+  ["Founder","A. Strategic & Commercial","Product thinking","Supporting","A product or offer you scoped that reached customers"],
+  ["Founder","A. Strategic & Commercial","Sales","Core","Personally closed deals with a tracked conversion rate"],
+  ["Founder","A. Strategic & Commercial","Marketing & positioning","Supporting","A positioning or campaign you ran with measurable reach/response"],
+  ["Founder","A. Strategic & Commercial","Business development","Core","Partnerships or channels you personally opened"],
+  ["Founder","B. Financial & Operational","Financial literacy","Core","Can read and act on your own P&L/balance sheet unaided"],
+  ["Founder","B. Financial & Operational","Financial modelling","Core","Built a model used to make a real capital or hiring decision"],
+  ["Founder","B. Financial & Operational","Unit economics","Core","Can state and defend the unit economics of a venture you run"],
+  ["Founder","B. Financial & Operational","Operations & systems","Core","A system or process you built that others now run without you"],
+  ["Founder","B. Financial & Operational","Hiring & talent","Core","Hires you made who are still performing a year+ later"],
+  ["Founder","B. Financial & Operational","Negotiation","Core","Negotiated outcomes (deals, terms, salary) with a documented result"],
+  ["Founder","B. Financial & Operational","Capital allocation","Core","Capital decisions you made, tracked against the Capital Engine"],
+  ["Founder","C. Leadership & Entrepreneurship","Decision-making","Core","Consequential decisions you made and can defend in hindsight"],
+  ["Founder","C. Leadership & Entrepreneurship","Team leadership","Core","A team you led with retention/output evidence"],
+  ["Founder","C. Leadership & Entrepreneurship","Entrepreneurship","Core","A venture you started, still operating"],
+  ["Founder","C. Leadership & Entrepreneurship","Founder resilience","Core","A setback you recovered from with the venture intact"],
+  ["Founder","C. Leadership & Entrepreneurship","Institution building (business)","Core","An institution or lasting structure you built, not just a project"],
+  ["Intellectual / Thought","D. Intellectual Foundations","Reading & knowledge acquisition","Supporting","A reading log/system you've maintained for 12+ months"],
+  ["Intellectual / Thought","D. Intellectual Foundations","Research","Core","A research piece that changed how you or others acted"],
+  ["Intellectual / Thought","D. Intellectual Foundations","Critical thinking","Core","Publicly defended a position under real scrutiny"],
+  ["Intellectual / Thought","D. Intellectual Foundations","Economics","Supporting","Can explain and apply economic reasoning to a real decision"],
+  ["Intellectual / Thought","D. Intellectual Foundations","Philosophy","Supporting","Written work engaging philosophical ideas seriously"],
+  ["Intellectual / Thought","E. Communication & Thought Leadership","Writing","Core","Published body of writing with a real audience"],
+  ["Intellectual / Thought","E. Communication & Thought Leadership","Public speaking","Core","Talks delivered, with audience size/feedback tracked"],
+  ["Intellectual / Thought","E. Communication & Thought Leadership","Storytelling","Core","Stories you've told that measurably moved an audience"],
+  ["Intellectual / Thought","E. Communication & Thought Leadership","Interviewing","Supporting","Interviews conducted (as host or guest)"],
+  ["Intellectual / Thought","E. Communication & Thought Leadership","Media communication","Supporting","Media appearances or features"],
+  ["Intellectual / Thought","E. Communication & Thought Leadership","Thought leadership","Core","Ideas of yours cited, shared, or built on by others"],
+  ["Preacher / Spiritual","F. Biblical & Theological Foundations","Biblical literacy","Core","Depth of Scripture knowledge demonstrated in teaching"],
+  ["Preacher / Spiritual","F. Biblical & Theological Foundations","Theology","Core","A theological position articulated and taught"],
+  ["Preacher / Spiritual","F. Biblical & Theological Foundations","Hermeneutics","Core","Sound interpretive method applied consistently in teaching"],
+  ["Preacher / Spiritual","F. Biblical & Theological Foundations","Biblical interpretation","Core","Original exegesis you've produced and taught from"],
+  ["Preacher / Spiritual","G. Teaching & Ministry","Sermon construction","Core","Sermons written and delivered, logged over time"],
+  ["Preacher / Spiritual","G. Teaching & Ministry","Teaching","Core","A teaching series or course you've run"],
+  ["Preacher / Spiritual","G. Teaching & Ministry","Preaching","Core","Preaching engagements, with venue/audience tracked"],
+  ["Preacher / Spiritual","G. Teaching & Ministry","Apologetics","Supporting","Defended the faith in a real, documented exchange"],
+  ["Preacher / Spiritual","G. Teaching & Ministry","Discipleship","Core","People you've discipled who are now discipling others"],
+  ["Preacher / Spiritual","H. Spiritual Leadership","Mentorship","Core","Mentees, with tracked outcomes in their lives"],
+  ["Preacher / Spiritual","H. Spiritual Leadership","Spiritual leadership","Core","A group or community you lead spiritually"],
+  ["Preacher / Spiritual","H. Spiritual Leadership","Pastoral leadership","Supporting","Pastoral care or oversight you provide, with continuity"],
+  ["Preacher / Spiritual","H. Spiritual Leadership","Institution building (ministry)","Core","A ministry or institution you've built, not just served"],
+];
+
+const SUN_SKILLS = [
+  ["Investment & Wealth","A. Investment — Foundations","Financial accounting","Core","Can read and analyse financial statements unaided"],
+  ["Investment & Wealth","A. Investment — Foundations","Economics","Core","Macro/micro reasoning applied to a real investment view"],
+  ["Investment & Wealth","A. Investment — Foundations","Financial markets","Core","Tracks and can discuss market moves with informed reasoning"],
+  ["Investment & Wealth","A. Investment — Foundations","Valuation","Core","Valuations you've produced that informed a real decision"],
+  ["Investment & Wealth","A. Investment — Foundations","Equity analysis","Core","Equity research/theses you've written, tracked for accuracy"],
+  ["Investment & Wealth","A. Investment — Foundations","Fixed income","Supporting","Fixed income positions or analysis you've produced"],
+  ["Investment & Wealth","A. Investment — Application","Financial modelling","Core","Models built and used for real capital decisions"],
+  ["Investment & Wealth","A. Investment — Application","Portfolio construction","Core","A portfolio you've constructed with a tracked strategy"],
+  ["Investment & Wealth","A. Investment — Application","Asset allocation","Core","Allocation decisions you've made and can defend"],
+  ["Investment & Wealth","A. Investment — Application","Risk management","Core","Risk frameworks you've applied to a real portfolio"],
+  ["Investment & Wealth","A. Investment — Application","Investment strategy","Core","A stated strategy you've followed with tracked results"],
+  ["Investment & Wealth","A. Investment — Application","Performance analysis","Supporting","Performance reports you've produced and acted on"],
+  ["Investment & Wealth","A. Investment — Leadership","Investment decision-making","Core","Investment calls you've made and owned the outcome of"],
+  ["Investment & Wealth","A. Investment — Leadership","Investment leadership","Core","An investment team or process you've led"],
+  ["Investment & Wealth","A. Investment — Leadership","Investment thought leadership","Core","Investment commentary or views others follow"],
+  ["Capital Markets","B. Capital Markets — Foundations","Corporate finance","Core","Corporate finance concepts applied to a real deal or case"],
+  ["Capital Markets","B. Capital Markets — Foundations","M&A","Supporting","Exposure to or analysis of a real M&A transaction"],
+  ["Capital Markets","B. Capital Markets — Foundations","Market analysis","Core","Capital markets analysis that informed a real view"],
+  ["Capital Markets","B. Capital Markets — Application","Investment banking","Supporting","IB-style transaction work you've contributed to"],
+  ["Capital Markets","B. Capital Markets — Application","Capital raising","Supporting","Capital raised, with your role in it documented"],
+  ["Capital Markets","B. Capital Markets — Application","Transaction analysis","Supporting","Transactions you've analysed end to end"],
+  ["Capital Markets","B. Capital Markets — Application","Corporate advisory","Core","Advisory relationships with corporate clients, tracked over time"],
+  ["Capital Markets","B. Capital Markets — Leadership","Strategic capital allocation","Core","Capital allocation decisions at an institutional scale"],
+  ["Capital Markets","B. Capital Markets — Leadership","Corporate governance","Supporting","Governance exposure (board, committee, or advisory role)"],
+  ["Capital Markets","B. Capital Markets — Leadership","Executive decision-making","Core","Executive-level calls you've made and owned"],
+  ["Corporate Wealth","C. Corporate Wealth — Foundations","Wealth management fundamentals","Core","Applies core wealth management concepts to real cases"],
+  ["Corporate Wealth","C. Corporate Wealth — Foundations","Financial planning","Core","Financial plans you've built for a real client or household"],
+  ["Corporate Wealth","C. Corporate Wealth — Foundations","Cash management","Supporting","Cash management approach you've designed or run"],
+  ["Corporate Wealth","C. Corporate Wealth — Foundations","Treasury","Supporting","Treasury function exposure or work product"],
+  ["Corporate Wealth","C. Corporate Wealth — Application","Client advisory","Core","A client roster you actively advise, with tenure tracked"],
+  ["Corporate Wealth","C. Corporate Wealth — Application","Portfolio management","Core","Portfolios you manage with performance tracked"],
+  ["Corporate Wealth","C. Corporate Wealth — Application","Corporate treasury management","Supporting","Treasury management work for a real organisation"],
+  ["Corporate Wealth","C. Corporate Wealth — Application","Wealth strategy","Core","Wealth strategies you've designed and implemented"],
+  ["Corporate Wealth","C. Corporate Wealth — Leadership","Relationship leadership","Core","Senior relationships you own and have grown"],
+  ["Corporate Wealth","C. Corporate Wealth — Leadership","Executive communication","Core","Executive-level presentations or communications delivered"],
+  ["Corporate Wealth","C. Corporate Wealth — Leadership","Strategic wealth advisory","Core","Advisory work at the strategic (not transactional) level"],
+  ["Corporate Wealth","C. Corporate Wealth — Leadership","Business development","Supporting","New client or business relationships you've personally opened"],
+];
+
+function buildSkillList(raw, prefix){
+  return raw.map((r, i) => ({
+    id: prefix + '-' + i,
+    domain: r[0], category: r[1], name: r[2], type: r[3], evidence: r[4],
+  }));
+}
+const SKILLS = {
+  Ant: buildSkillList(ANT_SKILLS, 'ant'),
+  Sun: buildSkillList(SUN_SKILLS, 'sun'),
+};
+
+const REFERENCE_MODELS = [
+  { person:"Ant", name:"Steven Bartlett", tag:"Entrepreneurship + media + investing + public influence", note:"What we're extracting: media and communication as an asset that compounds alongside entrepreneurship and investing, not something separate from it. Don't wait to start the public body of work." },
+  { person:"Sun", name:"Madeline Nettey", tag:"Capital markets + executive leadership", note:"What we're extracting: a career arc across investment banking, research, financial advisory, funds management, wealth management, brokerage, and eventually executive leadership. The breadth is the point, not a single narrow lane." },
+  { person:"Sun", name:"Melissa Whitney", tag:"Investment expertise + corporate advisory", note:"What we're extracting: sophisticated corporate cash/investment management combined with long-term advisory relationships with CFOs, treasury teams, and boards. Depth of trust over time, not transactional advice." },
+];
+
+let DATA = null;
+let viewFilter = 'joint';
+let saveTimer = null;
+let expandedActivity = {};
+
+function defaultData(){
+  const skillState = {};
+  [...SKILLS.Ant, ...SKILLS.Sun].forEach(s => {
+    skillState[s.id] = { baseline: null, level: null, notes: '', activity: [] };
+  });
+  return {
+    skills: skillState,
+    quarterlyReviews: [],
+    bodyOfWork: [],
+    goals: [],
+  };
+}
+
+async function loadData(){
+  const { data, error } = await db.from('life_os_state').select('data').eq('id', 2).single();
+  if(error) throw error;
+  DATA = mergeWithDefaults(data.data);
+}
+
+function mergeWithDefaults(loaded){
+  const base = defaultData();
+  if(!loaded || typeof loaded !== 'object') return base;
+  const skills = Object.assign({}, base.skills, loaded.skills || {});
+  return {
+    skills: skills,
+    quarterlyReviews: Array.isArray(loaded.quarterlyReviews) ? loaded.quarterlyReviews : [],
+    bodyOfWork: Array.isArray(loaded.bodyOfWork) ? loaded.bodyOfWork : [],
+    goals: Array.isArray(loaded.goals) ? loaded.goals : [],
+  };
+}
+
+async function saveData(){
+  const { error } = await db.from('life_os_state').update({ data: DATA, updated_at: new Date().toISOString() }).eq('id', 2);
+  if(error){ console.error('Save failed', error); alert('Your change could not be saved. Please try again.'); return; }
+  const note = document.getElementById('saveNote');
+  note.classList.add('show');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => note.classList.remove('show'), 1200);
+}
+
+function genId(){ return 't-' + Date.now() + '-' + Math.random().toString(36).slice(2,7); }
+function fmt(n){ return (Number(n)||0).toLocaleString('en-US'); }
+function filterLabel(){ return viewFilter === 'joint' ? 'Joint' : viewFilter + "'s view"; }
+function matchesFilter(entryPerson){ return viewFilter === 'joint' ? true : entryPerson === viewFilter; }
+
+/* ===== NAV ===== */
+function renderNav(){
+  const list = document.getElementById('nav-list');
+  list.innerHTML = '';
+  PILLARS.forEach(p => {
+    const el = document.createElement(p.enabled ? 'a' : 'div');
+    if(p.enabled) el.href = p.href;
+    el.className = 'pillar-item' + (p.current ? ' active' : '') + (!p.enabled ? ' disabled' : '');
+    el.innerHTML = `<span class="num">${String(p.id).padStart(2,'0')}</span><span class="name">${p.name}${!p.enabled ? '<br><span style="font-size:10.5px;">not built yet</span>' : ''}</span>`;
+    list.appendChild(el);
+  });
+}
+
+/* ===== MAIN RENDER ===== */
+function renderMain(){
+  const main = document.getElementById('main');
+  try{ renderMainInner(main); }
+  catch(e){ console.error('Render error', e); main.innerHTML = '<div class="placeholder">Something went wrong rendering the dashboard. Check the console.</div>'; }
+}
+
+function renderMainInner(main){
+  main.innerHTML = `
+    <div class="eyebrow">PILLAR 02 · BUILD YOURSELVES</div>
+    <h1 class="page-title serif">Career & Mastery</h1>
+    <p class="page-sub">Become exceptionally capable in your chosen fields, build recognized expertise, develop leadership authority, and create bodies of work that position you for the influence and responsibility you want. Planning horizon: October 2026 to September 2031.</p>
+
+    <div class="filter-bar">
+      <button class="filter-btn ${viewFilter==='Ant'?'active':''}" data-filter="Ant">Ant</button>
+      <button class="filter-btn ${viewFilter==='Sun'?'active':''}" data-filter="Sun">Sun</button>
+      <button class="filter-btn ${viewFilter==='joint'?'active':''}" data-filter="joint">Joint</button>
+    </div>
+
+    <div class="tabs-nav">
+      <button class="tab-btn active" data-tab="overview">Overview</button>
+      <button class="tab-btn" data-tab="ant-mastery">My Mastery</button>
+      <button class="tab-btn" data-tab="sun-mastery">Sun's Mastery</button>
+      <button class="tab-btn" data-tab="arc">5-Year Arc</button>
+      <button class="tab-btn" data-tab="reviews">Quarterly Reviews</button>
+      <button class="tab-btn" data-tab="bow">Body of Work</button>
+      <button class="tab-btn" data-tab="goals">Goals &amp; Milestones</button>
+      <button class="tab-btn" data-tab="models">Reference Models</button>
+    </div>
+
+    <div id="overview-tab" class="tab-content active"></div>
+    <div id="ant-mastery-tab" class="tab-content"></div>
+    <div id="sun-mastery-tab" class="tab-content"></div>
+    <div id="arc-tab" class="tab-content"></div>
+    <div id="reviews-tab" class="tab-content"></div>
+    <div id="bow-tab" class="tab-content"></div>
+    <div id="goals-tab" class="tab-content"></div>
+    <div id="models-tab" class="tab-content"></div>
+  `;
+
+  wireFilterBar();
+  wireTabs();
+  renderOverview();
+  renderMasteryTab('Ant');
+  renderMasteryTab('Sun');
+  renderArc();
+  renderReviews();
+  renderBodyOfWork();
+  renderGoals();
+  renderModels();
+}
+
+function wireFilterBar(){
+  document.querySelectorAll('[data-filter]').forEach(btn => {
+    btn.addEventListener('click', (e) => { viewFilter = e.currentTarget.getAttribute('data-filter'); renderMain(); });
+  });
+}
+
+function wireTabs(){
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const tab = e.target.getAttribute('data-tab');
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      e.target.classList.add('active');
+      document.getElementById(tab + '-tab').classList.add('active');
+    });
+  });
+}
+
+/* ===== OVERVIEW ===== */
+function personStats(person){
+  const skills = SKILLS[person];
+  const year = currentPillar2Year();
+  let onOrAhead = 0, coreCount = 0, avgLevel = 0, assessed = 0;
+  skills.forEach(s => {
+    const st = DATA.skills[s.id] || {};
+    const target = TYPE_TARGETS[s.type]['y' + year.year <= 5 ? 'y' + Math.min(year.year,5) : 'y5'];
+    const lvl = Number(st.level) || 0;
+    if(st.level !== null && st.level !== undefined){ assessed++; avgLevel += lvl; }
+    if(s.type === 'Core') coreCount++;
+    const t = year.year <= 5 ? TYPE_TARGETS[s.type]['y' + Math.min(Math.max(year.year,1),5)] : TYPE_TARGETS[s.type].y5;
+    if(lvl >= t) onOrAhead++;
+  });
+  return {
+    total: skills.length, coreCount, onOrAhead,
+    avgLevel: assessed ? (avgLevel/assessed).toFixed(1) : '—',
+    assessed,
+  };
+}
+
+function renderOverview(){
+  const year = currentPillar2Year();
+  const antStats = personStats('Ant');
+  const sunStats = personStats('Sun');
+  const reviewCount = DATA.quarterlyReviews.length;
+  const bowCount = DATA.bodyOfWork.length;
+
+  document.getElementById('overview-tab').innerHTML = `
+    <section>
+      <div class="section-head">
+        <h2>Joint snapshot</h2>
+        <span class="section-note">${year.label} · ${year.span}</span>
+      </div>
+      <div class="stat-grid">
+        <div class="stat-card"><div class="lbl">Ant's skills on/ahead of target</div><div class="val">${antStats.onOrAhead} / ${antStats.total}</div></div>
+        <div class="stat-card"><div class="lbl">Sun's skills on/ahead of target</div><div class="val">${sunStats.onOrAhead} / ${sunStats.total}</div></div>
+        <div class="stat-card"><div class="lbl">Ant's average assessed level</div><div class="val">${antStats.avgLevel}</div></div>
+        <div class="stat-card"><div class="lbl">Sun's average assessed level</div><div class="val">${sunStats.avgLevel}</div></div>
+        <div class="stat-card"><div class="lbl">Quarterly reviews logged</div><div class="val">${reviewCount}</div></div>
+        <div class="stat-card"><div class="lbl">Body of work entries</div><div class="val">${bowCount}</div></div>
+      </div>
+      <p class="section-note">"Assessed" counts skills where a Mastery Level has been deliberately set. Unassessed skills aren't counted as zero, they're simply not yet reviewed. Set levels in the mastery tabs, ideally at your quarterly review, not after every activity logged.</p>
+    </section>
+
+    <section>
+      <div class="section-head"><h2>The governing rule</h2></div>
+      <p style="font-size:13.5px; line-height:1.6; color:var(--text-dim);">
+        <strong style="color:var(--text);">Activities don't automatically increase mastery. Evidence does.</strong>
+        Log what you actually do, talks given, sermons preached, models built, in each skill's activity log as it happens. Then, at your quarterly review, look at the accumulated activity and decide, deliberately, whether it constitutes real evidence of a higher Mastery Level. The system never calculates this for you.
+      </p>
+    </section>
+  `;
+}
+
+/* ===== MASTERY TABS ===== */
+function renderMasteryTab(person){
+  const containerId = person === 'Ant' ? 'ant-mastery-tab' : 'sun-mastery-tab';
+  const skills = SKILLS[person];
+  const year = currentPillar2Year();
+  const yKey = 'y' + Math.min(Math.max(year.year,1),5);
+
+  const domains = [...new Set(skills.map(s => s.domain))];
+
+  let html = `
+    <section>
+      <div class="section-head">
+        <h2>${person}'s Mastery</h2>
+        <span class="section-note">${skills.length} skills · ${year.label} target column highlighted</span>
+      </div>
+  `;
+
+  domains.forEach(domain => {
+    const domainSkills = skills.filter(s => s.domain === domain);
+    const categories = [...new Set(domainSkills.map(s => s.category))];
+    html += `<h3>${domain}</h3>`;
+    categories.forEach(cat => {
+      const catSkills = domainSkills.filter(s => s.category === cat);
+      html += `
+        <div class="domain-count">${cat}</div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width:26%;">Skill</th>
+              <th style="width:8%;">Type</th>
+              <th style="width:8%;">Baseline</th>
+              <th style="width:10%;">Current</th>
+              <th style="width:18%;">Y1 / Y3 / Y5</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${catSkills.map(s => renderSkillRow(s, yKey)).join('')}
+          </tbody>
+        </table>
+      `;
+    });
+  });
+
+  html += `</section>`;
+  document.getElementById(containerId).innerHTML = html;
+  wireMasteryInputs(person);
+}
+
+function levelOptions(selected){
+  let opts = '<option value="">—</option>';
+  for(let i=1;i<=6;i++){ opts += `<option value="${i}" ${Number(selected)===i?'selected':''}>${i}</option>`; }
+  return opts;
+}
+
+function renderSkillRow(s, yKey){
+  const st = DATA.skills[s.id] || { baseline:null, level:null, notes:'', activity:[] };
+  const targets = TYPE_TARGETS[s.type];
+  const isOpen = !!expandedActivity[s.id];
+  const activity = (st.activity || []).slice().sort((a,b) => (b.date||'').localeCompare(a.date||''));
+
+  const activityRows = activity.length
+    ? activity.map(a => `
+        <div class="activity-entry">
+          <span class="a-date">${a.date||''}</span>
+          <span class="a-note">${a.note||''}</span>
+          <button data-del-activity="${s.id}|${a.id}">✕</button>
+        </div>
+      `).join('')
+    : `<div class="section-note">No activity logged yet.</div>`;
+
+  return `
+    <tr>
+      <td>
+        <div class="skill-name">${s.name}</div>
+        <div class="skill-evidence">Evidence: ${s.evidence}</div>
+        <button class="activity-toggle" data-toggle-activity="${s.id}">${isOpen ? 'Hide' : 'Show'} activity log (${activity.length})</button>
+        ${isOpen ? `
+          <div class="activity-panel">
+            ${activityRows}
+            <div class="activity-add">
+              <input type="date" id="act-date-${s.id}">
+              <input type="text" id="act-note-${s.id}" placeholder="What did you do?">
+              <button data-add-activity="${s.id}">Log</button>
+            </div>
+          </div>
+        ` : ''}
+      </td>
+      <td><span class="badge ${s.type==='Core'?'badge-core':'badge-support'}">${s.type}</span></td>
+      <td><select class="lvl-select" data-baseline="${s.id}">${levelOptions(st.baseline)}</select></td>
+      <td><select class="lvl-select" data-level="${s.id}">${levelOptions(st.level)}</select></td>
+      <td>
+        <div class="target-cell ${yKey==='y1'?'current':''}">${targets.y1}</div>
+        <div class="target-cell ${yKey==='y3'?'current':''}">${targets.y3}</div>
+        <div class="target-cell ${yKey==='y5'?'current':''}">${targets.y5}</div>
+      </td>
+      <td><input type="text" class="notes-input" data-notes="${s.id}" value="${(st.notes||'').replace(/"/g,'&quot;')}" placeholder="Notes"></td>
+    </tr>
+  `;
+}
+
+function wireMasteryInputs(person){
+  document.querySelectorAll(`[data-toggle-activity]`).forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const id = e.currentTarget.getAttribute('data-toggle-activity');
+      expandedActivity[id] = !expandedActivity[id];
+      renderMasteryTab(person);
+    });
+  });
+
+  document.querySelectorAll('[data-baseline]').forEach(sel => {
+    sel.addEventListener('change', (e) => {
+      const id = e.target.getAttribute('data-baseline');
+      if(!DATA.skills[id]) DATA.skills[id] = { baseline:null, level:null, notes:'', activity:[] };
+      DATA.skills[id].baseline = e.target.value ? Number(e.target.value) : null;
+      saveData();
+    });
+  });
+
+  document.querySelectorAll('[data-level]').forEach(sel => {
+    sel.addEventListener('change', (e) => {
+      const id = e.target.getAttribute('data-level');
+      if(!DATA.skills[id]) DATA.skills[id] = { baseline:null, level:null, notes:'', activity:[] };
+      DATA.skills[id].level = e.target.value ? Number(e.target.value) : null;
+      saveData();
+    });
+  });
+
+  document.querySelectorAll('[data-notes]').forEach(inp => {
+    inp.addEventListener('change', (e) => {
+      const id = e.target.getAttribute('data-notes');
+      if(!DATA.skills[id]) DATA.skills[id] = { baseline:null, level:null, notes:'', activity:[] };
+      DATA.skills[id].notes = e.target.value;
+      saveData();
+    });
+  });
+
+  document.querySelectorAll('[data-add-activity]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const id = e.currentTarget.getAttribute('data-add-activity');
+      const dateEl = document.getElementById('act-date-'+id);
+      const noteEl = document.getElementById('act-note-'+id);
+      if(!noteEl.value.trim()) return;
+      if(!DATA.skills[id]) DATA.skills[id] = { baseline:null, level:null, notes:'', activity:[] };
+      if(!DATA.skills[id].activity) DATA.skills[id].activity = [];
+      DATA.skills[id].activity.push({ id: genId(), date: dateEl.value || new Date().toISOString().split('T')[0], note: noteEl.value });
+      saveData();
+      renderMasteryTab(person);
+    });
+  });
+
+  document.querySelectorAll('[data-del-activity]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      if(!confirm('Remove this activity entry? This cannot be undone.')) return;
+      const [skillId, activityId] = e.currentTarget.getAttribute('data-del-activity').split('|');
+      if(DATA.skills[skillId] && DATA.skills[skillId].activity){
+        DATA.skills[skillId].activity = DATA.skills[skillId].activity.filter(a => a.id !== activityId);
+      }
+      saveData();
+      renderMasteryTab(person);
+    });
+  });
+}
+
+/* ===== 5-YEAR ARC ===== */
+const ARC_CONTENT = [
+  { year:1, ant:["Professional excellence","Strategic thinking","Business fundamentals","Public speaking","Writing","Theology & Scripture","Mentorship","Begin speaking publicly","Build a personal knowledge system"],
+             sun:["CFA progression","Investment fundamentals","Financial modelling","Valuation","Capital markets","Investment research","Networking","Investment-sector positioning","Executive communication"] },
+  { year:2, ant:["Founder-level business skills","Sales","Business development","Financial management","Team leadership","Product development","Strategic decision-making","Consistent preaching/teaching","Thought leadership"],
+             sun:["Move from finance-adjacent experience into genuine investment expertise","Investment role","CFA progression","Portfolio/research work","Client exposure","Strong professional network"] },
+  { year:3, ant:["A company/business portfolio","Public body of work","Speaking portfolio","Teaching/preaching portfolio","Mentorship community","Strong founder network"],
+             sun:["Investment track record","Specialisation","Client credibility","Thought leadership","Leadership responsibility"] },
+  { year:4, ant:["Builder → Leader","Building leaders","Delegation","Institutional design","Capital allocation","Larger businesses & platforms"],
+             sun:["Investment professional → investment/wealth leader","Managing people & portfolios","Business development","Executive presence","Governance"] },
+  { year:5, ant:["Founder + builder + communicator + teacher + institutional leader","Businesses, intellectual work, speaking, teaching, mentorship, capital, institutions"],
+             sun:["Senior investment/wealth authority","Deep technical expertise + executive credibility","Institutional influence"] },
+];
+
+function renderArc(){
+  const current = currentPillar2Year();
+  let html = `<section><div class="section-head"><h2>The Five-Year Development Arc</h2><span class="section-note">Year 1 shouldn't look like Year 5 — you're supposed to compound</span></div>`;
+  ARC_CONTENT.forEach(y => {
+    const py = PILLAR2_YEARS[y.year-1];
+    html += `
+      <div class="arc-year ${current.year===y.year?'current':''}">
+        <h3>Year ${y.year}${current.year===y.year?' — Current':''}</h3>
+        <div class="span">${py.span}</div>
+        <div class="arc-cols">
+          <div class="arc-col"><h4>Ant</h4><ul>${y.ant.map(i=>`<li>${i}</li>`).join('')}</ul></div>
+          <div class="arc-col"><h4>Sun</h4><ul>${y.sun.map(i=>`<li>${i}</li>`).join('')}</ul></div>
+        </div>
+      </div>
+    `;
+  });
+  html += `</section>`;
+  document.getElementById('arc-tab').innerHTML = html;
+}
+
+/* ===== QUARTERLY REVIEWS ===== */
+function renderReviews(){
+  const reviews = DATA.quarterlyReviews.filter(r => matchesFilter(r.person)).slice().sort((a,b) => (b.date||'').localeCompare(a.date||''));
+
+  document.getElementById('reviews-tab').innerHTML = `
+    <section>
+      <div class="section-head"><h2>Quarterly Review</h2><span class="section-note">${filterLabel()}</span></div>
+      <div class="form-grid">
+        <label><span>Date</span><input type="date" id="rev-date"></label>
+        <label><span>Person</span>
+          <select id="rev-person">
+            <option value="Ant">Ant</option>
+            <option value="Sun">Sun</option>
+          </select>
+        </label>
+        <label><span>Learn — what did I learn?</span><textarea id="rev-learn"></textarea></label>
+        <label><span>Build — what did I create?</span><textarea id="rev-build"></textarea></label>
+        <label><span>Practise — what skill did I deliberately practise?</span><textarea id="rev-practise"></textarea></label>
+        <label><span>Demonstrate — what evidence did I produce?</span><textarea id="rev-demonstrate"></textarea></label>
+        <label><span>Lead — what did I lead?</span><textarea id="rev-lead"></textarea></label>
+        <label><span>Connect — who did I meet?</span><textarea id="rev-connect"></textarea></label>
+        <label><span>Teach — who did I help develop?</span><textarea id="rev-teach"></textarea></label>
+        <label><span>Next — what's the one capability to develop next?</span><textarea id="rev-next"></textarea></label>
+        <button id="btn-add-review">Save review</button>
+      </div>
+      <div id="reviews-list">
+        ${reviews.length ? reviews.map(r => `
+          <div class="review-card">
+            <button class="entry-card delete" data-del-review="${r.id}" style="float:right;background:none;border:none;color:var(--text-dim);cursor:pointer;">✕</button>
+            <strong>${r.person}</strong> <span class="section-note">${r.date}</span>
+            <div class="review-grid">
+              <div class="review-item"><div class="k">LEARN</div><div class="v">${r.learn||'—'}</div></div>
+              <div class="review-item"><div class="k">BUILD</div><div class="v">${r.build||'—'}</div></div>
+              <div class="review-item"><div class="k">PRACTISE</div><div class="v">${r.practise||'—'}</div></div>
+              <div class="review-item"><div class="k">DEMONSTRATE</div><div class="v">${r.demonstrate||'—'}</div></div>
+              <div class="review-item"><div class="k">LEAD</div><div class="v">${r.lead||'—'}</div></div>
+              <div class="review-item"><div class="k">CONNECT</div><div class="v">${r.connect||'—'}</div></div>
+              <div class="review-item"><div class="k">TEACH</div><div class="v">${r.teach||'—'}</div></div>
+              <div class="review-item"><div class="k">NEXT</div><div class="v">${r.next||'—'}</div></div>
+            </div>
+          </div>
+        `).join('') : '<div class="placeholder">No reviews logged yet for this view.</div>'}
+      </div>
+    </section>
+  `;
+
+  document.getElementById('btn-add-review').addEventListener('click', () => {
+    const date = document.getElementById('rev-date').value || new Date().toISOString().split('T')[0];
+    const person = document.getElementById('rev-person').value;
+    DATA.quarterlyReviews.push({
+      id: genId(), date, person,
+      learn: document.getElementById('rev-learn').value,
+      build: document.getElementById('rev-build').value,
+      practise: document.getElementById('rev-practise').value,
+      demonstrate: document.getElementById('rev-demonstrate').value,
+      lead: document.getElementById('rev-lead').value,
+      connect: document.getElementById('rev-connect').value,
+      teach: document.getElementById('rev-teach').value,
+      next: document.getElementById('rev-next').value,
+    });
+    saveData();
+    renderReviews();
+  });
+
+  document.querySelectorAll('[data-del-review]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      if(!confirm('Remove this review? This cannot be undone.')) return;
+      const id = e.currentTarget.getAttribute('data-del-review');
+      DATA.quarterlyReviews = DATA.quarterlyReviews.filter(r => r.id !== id);
+      saveData();
+      renderReviews();
+    });
+  });
+}
+
+/* ===== BODY OF WORK ===== */
+function renderBodyOfWork(){
+  const entries = DATA.bodyOfWork.filter(e => matchesFilter(e.person)).slice().sort((a,b) => (b.date||'').localeCompare(a.date||''));
+
+  document.getElementById('bow-tab').innerHTML = `
+    <section>
+      <div class="section-head"><h2>Body of Work</h2><span class="section-note">${filterLabel()} · evidence and outputs</span></div>
+      <div class="form-grid">
+        <label><span>Date</span><input type="date" id="bow-date"></label>
+        <label><span>Person</span>
+          <select id="bow-person">
+            <option value="Ant">Ant</option>
+            <option value="Sun">Sun</option>
+          </select>
+        </label>
+        <label><span>Type</span>
+          <select id="bow-type">
+            <option>Sermon</option><option>Talk</option><option>Article</option><option>Business plan</option>
+            <option>Investment thesis</option><option>Financial model</option><option>Client work</option>
+            <option>Interview</option><option>Podcast</option><option>Mentorship</option><option>Other</option>
+          </select>
+        </label>
+        <label><span>Title</span><input type="text" id="bow-title" placeholder="Short title"></label>
+        <label><span>Description</span><textarea id="bow-desc"></textarea></label>
+        <button id="btn-add-bow">Add</button>
+      </div>
+      <div id="bow-list">
+        ${entries.length ? entries.map(e => `
+          <div class="entry-card">
+            <button class="delete" data-del-bow="${e.id}">✕</button>
+            <div class="meta">${e.person} · ${e.type} · ${e.date}</div>
+            <div class="title">${e.title}</div>
+            <div class="body">${e.description||''}</div>
+          </div>
+        `).join('') : '<div class="placeholder">No entries yet for this view.</div>'}
+      </div>
+    </section>
+  `;
+
+  document.getElementById('btn-add-bow').addEventListener('click', () => {
+    const title = document.getElementById('bow-title').value.trim();
+    if(!title) return;
+    DATA.bodyOfWork.push({
+      id: genId(),
+      date: document.getElementById('bow-date').value || new Date().toISOString().split('T')[0],
+      person: document.getElementById('bow-person').value,
+      type: document.getElementById('bow-type').value,
+      title, description: document.getElementById('bow-desc').value,
+    });
+    saveData();
+    renderBodyOfWork();
+  });
+
+  document.querySelectorAll('[data-del-bow]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      if(!confirm('Remove this entry? This cannot be undone.')) return;
+      const id = e.currentTarget.getAttribute('data-del-bow');
+      DATA.bodyOfWork = DATA.bodyOfWork.filter(x => x.id !== id);
+      saveData();
+      renderBodyOfWork();
+    });
+  });
+}
+
+/* ===== GOALS & MILESTONES ===== */
+function renderGoals(){
+  const timeframes = ['Annual','Semiannual','Quarterly','Monthly'];
+  const goals = DATA.goals.filter(g => matchesFilter(g.person));
+
+  document.getElementById('goals-tab').innerHTML = `
+    <section>
+      <div class="section-head"><h2>Goals &amp; Milestones</h2><span class="section-note">${filterLabel()}</span></div>
+      <div class="form-grid">
+        <label><span>Timeframe</span>
+          <select id="goal-timeframe">${timeframes.map(t=>`<option>${t}</option>`).join('')}</select>
+        </label>
+        <label><span>Person</span>
+          <select id="goal-person"><option value="Ant">Ant</option><option value="Sun">Sun</option></select>
+        </label>
+        <label><span>Goal</span><input type="text" id="goal-title" placeholder="Describe the goal" style="min-width:220px;"></label>
+        <label><span>Due date</span><input type="date" id="goal-due"></label>
+        <button id="btn-add-goal">Add goal</button>
+      </div>
+      ${timeframes.map(tf => {
+        const tfGoals = goals.filter(g => g.timeframe === tf);
+        return `
+          <h3>${tf}</h3>
+          ${tfGoals.length ? tfGoals.map(g => `
+            <div class="entry-card">
+              <button class="delete" data-del-goal="${g.id}">✕</button>
+              <div class="meta">${g.person}${g.due ? ' · due ' + g.due : ''}</div>
+              <div class="title">${g.title}</div>
+              <select class="lvl-select" style="width:160px;" data-goal-status="${g.id}">
+                <option value="not" ${g.status==='not'?'selected':''}>Not started</option>
+                <option value="progress" ${g.status==='progress'?'selected':''}>In progress</option>
+                <option value="done" ${g.status==='done'?'selected':''}>Done</option>
+              </select>
+            </div>
+          `).join('') : '<div class="placeholder">No ' + tf.toLowerCase() + ' goals yet for this view.</div>'}
+        `;
+      }).join('')}
+    </section>
+  `;
+
+  document.getElementById('btn-add-goal').addEventListener('click', () => {
+    const title = document.getElementById('goal-title').value.trim();
+    if(!title) return;
+    DATA.goals.push({
+      id: genId(),
+      timeframe: document.getElementById('goal-timeframe').value,
+      person: document.getElementById('goal-person').value,
+      title, due: document.getElementById('goal-due').value,
+      status: 'not',
+    });
+    saveData();
+    renderGoals();
+  });
+
+  document.querySelectorAll('[data-del-goal]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      if(!confirm('Remove this goal? This cannot be undone.')) return;
+      const id = e.currentTarget.getAttribute('data-del-goal');
+      DATA.goals = DATA.goals.filter(g => g.id !== id);
+      saveData();
+      renderGoals();
+    });
+  });
+
+  document.querySelectorAll('[data-goal-status]').forEach(sel => {
+    sel.addEventListener('change', (e) => {
+      const id = e.target.getAttribute('data-goal-status');
+      const g = DATA.goals.find(x => x.id === id);
+      if(g) g.status = e.target.value;
+      saveData();
+    });
+  });
+}
+
+/* ===== REFERENCE MODELS ===== */
+function renderModels(){
+  const models = REFERENCE_MODELS.filter(m => matchesFilter(m.person));
+  document.getElementById('models-tab').innerHTML = `
+    <section>
+      <div class="section-head"><h2>Reference Models</h2><span class="section-note">${filterLabel()} · what we're extracting from each, not just "be like them"</span></div>
+      ${models.map(m => `
+        <div class="model-card">
+          <h3>${m.name} <span class="section-note">(${m.person}'s model)</span></h3>
+          <div class="tag">${m.tag}</div>
+          <p>${m.note}</p>
+        </div>
+      `).join('')}
+    </section>
+  `;
+}
+
+/* ===== LOGIN (same pattern as Pillar 1) ===== */
+
+  let __loaded = false;
+  async function ensureLoaded(){
+    if(__loaded) return;
+    DATA = defaultData();
+    renderMain();
+    try{ await loadData(); }catch(e){ console.error('Pillar 2 load error', e); }
+    __loaded = true;
+  }
+  function render(){ renderMain(); }
+  return { ensureLoaded, render };
+})();
+
+const PILLARS = [
+  { id:1, name:"Wealth & Financial Independence", enabled:true },
+  { id:2, name:"Career & Mastery", enabled:true },
+  { id:3, name:"Business & Entrepreneurship", enabled:false },
+  { id:4, name:"Voice, Influence & Public Life", enabled:false },
+  { id:5, name:"Community & Relationships", enabled:false },
+  { id:6, name:"Marriage & Family", enabled:false },
+  { id:7, name:"Life Infrastructure", enabled:false },
+  { id:8, name:"Health, Faith & Life", enabled:false },
+];
+let currentPillarId = 1;
+
+function renderTopNav(){
+  const nav = document.getElementById('topnav');
+  nav.innerHTML = `
+    <div class="topnav-brand">Life OS</div>
+    <div class="topnav-items" id="topnav-items"></div>
+  `;
+  const items = document.getElementById('topnav-items');
+  PILLARS.forEach(p => {
+    const el = document.createElement('div');
+    el.className = 'topnav-item' + (p.id===currentPillarId ? ' active' : '') + (!p.enabled ? ' disabled' : '');
+    el.textContent = String(p.id).padStart(2,'0') + ' · ' + p.name;
+    if(!p.enabled){ el.title = 'Not built yet'; }
+    if(p.enabled){ el.addEventListener('click', () => switchPillar(p.id)); }
+    items.appendChild(el);
+  });
+}
+
+async function switchPillar(id){
+  currentPillarId = id;
+  renderTopNav();
+  const main = document.getElementById('main');
+  main.innerHTML = '<div class="placeholder">Loading…</div>';
+  if(id === 1){ await Pillar1.ensureLoaded(); Pillar1.render(); }
+  else if(id === 2){ await Pillar2.ensureLoaded(); Pillar2.render(); }
+}
+
 function showLogin(){
   document.body.innerHTML = `
     <main style="min-height:100vh;display:grid;place-items:center;padding:24px;background:#10151b;color:#e9e4d8;font-family:IBM Plex Sans,Arial,sans-serif;">
@@ -1659,35 +2618,23 @@ function showLogin(){
     const errorMessage = document.getElementById('loginError');
     errorMessage.textContent = 'Signing in…';
     const { error } = await db.auth.signInWithPassword({ email, password });
-    if(error){
-      errorMessage.textContent = 'That email or password did not work. Please try again.';
-      return;
-    }
+    if(error){ errorMessage.textContent = 'That email or password did not work. Please try again.'; return; }
     window.location.reload();
   });
 }
 
 async function requireLogin(){
   const { data, error } = await db.auth.getSession();
-  if(error || !data.session){
-    showLogin();
-    return false;
-  }
+  if(error || !data.session){ showLogin(); return false; }
   return true;
 }
 
-(async function init(){
+(async function initApp(){
   if(!await requireLogin()) return;
-  renderNav();
-  DATA = defaultData();
-  renderMain();
-  try{
-    await loadData();
-    renderMain();
-  }catch(e){
-    console.error('Init error', e);
-  }
+  renderTopNav();
+  await switchPillar(1);
 })();
+
 </script>
 </body>
 </html>
